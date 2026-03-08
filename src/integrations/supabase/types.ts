@@ -114,6 +114,39 @@ export type Database = {
           },
         ]
       }
+      latest_locations: {
+        Row: {
+          accuracy: number | null
+          heading: number | null
+          is_moving: boolean | null
+          latitude: number
+          longitude: number
+          speed: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accuracy?: number | null
+          heading?: number | null
+          is_moving?: boolean | null
+          latitude: number
+          longitude: number
+          speed?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accuracy?: number | null
+          heading?: number | null
+          is_moving?: boolean | null
+          latitude?: number
+          longitude?: number
+          speed?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string | null
@@ -244,6 +277,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_old_locations: { Args: never; Returns: undefined }
       is_family_member: {
         Args: { _target_user_id: string; _user_id: string }
         Returns: boolean
