@@ -116,24 +116,33 @@ export type Database = {
       }
       messages: {
         Row: {
-          content: string
+          content: string | null
           created_at: string
           family_id: string
           id: string
+          image_url: string | null
+          location_lat: number | null
+          location_lng: number | null
           user_id: string
         }
         Insert: {
-          content: string
+          content?: string | null
           created_at?: string
           family_id: string
           id?: string
+          image_url?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
           user_id: string
         }
         Update: {
-          content?: string
+          content?: string | null
           created_at?: string
           family_id?: string
           id?: string
+          image_url?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
           user_id?: string
         }
         Relationships: [

@@ -4,6 +4,7 @@ import { useFamily } from '@/hooks/useFamily';
 import { useLocationTracking } from '@/hooks/useLocationTracking';
 import { useRealtimeLocations } from '@/hooks/useRealtimeLocations';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import FamilySidebar from '@/components/FamilySidebar';
 import FamilyMap from '@/components/FamilyMap';
 import LocationHistory from '@/components/LocationHistory';
@@ -18,6 +19,7 @@ import { Menu, History, Shield, MessageCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
+import { Badge } from '@/components/ui/badge';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
@@ -35,6 +37,7 @@ export default function Dashboard() {
   usePushNotifications();
   useSOSAlerts();
   useRealtimeLocations(members, useCallback(() => refetch(), [refetch]));
+  const { unreadCount } = useUnreadMessages(family?.id, showChat);
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
     if (member.location) {
@@ -126,14 +129,21 @@ export default function Dashboard() {
       {/* Bottom buttons */}
       <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
         <SOSButton />
-        <Button
-          size="icon"
-          variant={showChat ? 'default' : 'secondary'}
-          className="shadow-lg w-12 h-12 rounded-full"
-          onClick={() => setShowChat(!showChat)}
-        >
-          <MessageCircle className="w-5 h-5" />
-        </Button>
+        <div className="relative">
+          <Button
+            size="icon"
+            variant={showChat ? 'default' : 'secondary'}
+            className="shadow-lg w-12 h-12 rounded-full"
+            onClick={() => setShowChat(!showChat)}
+          >
+            <MessageCircle className="w-5 h-5" />
+          </Button>
+          {unreadCount > 0 && !showChat && (
+            <Badge className="absolute -top-1 -right-1 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-card rounded-full">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Chat */}
