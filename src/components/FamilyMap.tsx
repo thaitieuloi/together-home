@@ -9,7 +9,6 @@ import { Tables } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
-import { useFamily } from '@/hooks/useFamily';
 
 const COLORS = ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
 

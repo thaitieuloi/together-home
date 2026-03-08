@@ -41,8 +41,9 @@ export function useLocationTracking() {
     const isNative = Capacitor.isNativePlatform();
 
     const sendLocation = async (lat: number, lng: number, accuracy: number | null, speed: number | null) => {
-      // Accuracy filter - discard inaccurate readings
-      if (accuracy !== null && accuracy > MAX_ACCURACY_METERS) {
+      // Accuracy filter - discard very inaccurate readings, but always allow first location
+      if (accuracy !== null && accuracy > MAX_ACCURACY_METERS && lastLocationRef.current !== null) {
+        console.log(`[LocationTracking] Skipped: accuracy ${accuracy}m > ${MAX_ACCURACY_METERS}m`);
         return;
       }
 
