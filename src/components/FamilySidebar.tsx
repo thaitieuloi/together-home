@@ -120,6 +120,10 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
 
       {/* Footer */}
       <div className="p-3 border-t border-border space-y-1">
+        <Button variant="ghost" onClick={toggleTheme} className="w-full justify-start text-muted-foreground" size="sm">
+          {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
+          {theme === 'dark' ? 'Chế độ sáng' : 'Chế độ tối'}
+        </Button>
         {onOpenProfile && (
           <Button variant="ghost" onClick={onOpenProfile} className="w-full justify-start text-muted-foreground" size="sm">
             <Settings className="w-4 h-4 mr-2" /> Cài đặt
