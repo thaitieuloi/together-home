@@ -18,7 +18,7 @@ interface Props {
   onOpenProfile?: () => void;
 }
 
-export default function FamilySidebar({ family, members, onMemberClick, onSignOut }: Props) {
+export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile }: Props) {
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState(false);
 
