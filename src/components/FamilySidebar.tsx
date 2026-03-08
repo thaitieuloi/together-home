@@ -2,7 +2,7 @@ import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, Copy, LogOut, Users, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { MapPin, Clock, Copy, LogOut, Users, ChevronLeft, ChevronRight, Settings, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
