@@ -37,6 +37,7 @@ export default function Dashboard() {
   usePushNotifications();
   useSOSAlerts();
   useRealtimeLocations(members, useCallback(() => refetch(), [refetch]));
+  const { unreadCount } = useUnreadMessages(family?.id, showChat);
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
     if (member.location) {
