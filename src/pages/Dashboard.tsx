@@ -5,10 +5,12 @@ import { useLocationTracking } from '@/hooks/useLocationTracking';
 import { useRealtimeLocations } from '@/hooks/useRealtimeLocations';
 import FamilySidebar from '@/components/FamilySidebar';
 import FamilyMap from '@/components/FamilyMap';
+import LocationHistory from '@/components/LocationHistory';
 import FamilySetup from '@/pages/FamilySetup';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
+import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-import { Menu } from 'lucide-react';
+import { Menu, History } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 export default function Dashboard() {
@@ -16,11 +18,10 @@ export default function Dashboard() {
   const { family, members, loading, refetch } = useFamily();
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
 
-  // Track current user's location
   useLocationTracking();
-
-  // Listen for realtime location updates
   useRealtimeLocations(members, useCallback(() => refetch(), [refetch]));
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
@@ -28,6 +29,11 @@ export default function Dashboard() {
       setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
     }
     setMobileOpen(false);
+  };
+
+  const handleCloseHistory = () => {
+    setShowHistory(false);
+    setHistoryTrail([]);
   };
 
   if (loading) {
@@ -73,9 +79,29 @@ export default function Dashboard() {
         </Sheet>
       </div>
 
+      {/* History toggle button */}
+      <div className="absolute top-4 right-4 z-[1000]">
+        <Button
+          size="icon"
+          variant={showHistory ? 'default' : 'secondary'}
+          className="shadow-lg"
+          onClick={() => showHistory ? handleCloseHistory() : setShowHistory(true)}
+        >
+          <History className="w-5 h-5" />
+        </Button>
+      </div>
+
       {/* Map */}
       <div className="flex-1 relative">
-        <FamilyMap members={members} flyTo={flyTo} />
+        <FamilyMap members={members} flyTo={flyTo} historyTrail={historyTrail} />
+
+        {showHistory && (
+          <LocationHistory
+            members={members}
+            onHistoryLoaded={setHistoryTrail}
+            onClose={handleCloseHistory}
+          />
+        )}
       </div>
     </div>
   );
