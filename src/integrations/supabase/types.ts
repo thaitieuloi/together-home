@@ -136,6 +136,10 @@ export type Database = {
         Args: { _target_user_id: string; _user_id: string }
         Returns: boolean
       }
+      is_member_of_family: {
+        Args: { _family_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
