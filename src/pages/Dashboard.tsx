@@ -13,6 +13,8 @@ import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Menu, History } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import SOSButton from '@/components/SOSButton';
+import { useSOSAlerts } from '@/hooks/useSOSAlerts';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
