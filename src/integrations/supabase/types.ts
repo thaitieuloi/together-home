@@ -73,12 +73,54 @@ export type Database = {
           },
         ]
       }
+      geofences: {
+        Row: {
+          created_at: string
+          created_by: string
+          family_id: string
+          id: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_meters: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          family_id: string
+          id?: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_meters?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          family_id?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          name?: string
+          radius_meters?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geofences_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
           display_name: string
           id: string
+          push_token: string | null
           updated_at: string
           user_id: string
         }
@@ -87,6 +129,7 @@ export type Database = {
           created_at?: string
           display_name?: string
           id?: string
+          push_token?: string | null
           updated_at?: string
           user_id: string
         }
@@ -95,7 +138,35 @@ export type Database = {
           created_at?: string
           display_name?: string
           id?: string
+          push_token?: string | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sos_alerts: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          message: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          message?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          message?: string | null
           user_id?: string
         }
         Relationships: []
