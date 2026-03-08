@@ -21,9 +21,8 @@ export function usePushNotifications() {
 
       PushNotifications.addListener('registration', async (token) => {
         console.log('Push token:', token.value);
-        // Store the token in the database for later use
         await supabase.from('profiles').update({
-          // You can add a push_token column to profiles table later
+          push_token: token.value,
         }).eq('user_id', user.id);
       });
 

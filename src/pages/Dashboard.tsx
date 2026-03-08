@@ -84,8 +84,8 @@ export default function Dashboard() {
         </Sheet>
       </div>
 
-      {/* History toggle button */}
-      <div className="absolute top-4 right-4 z-[1000]">
+      {/* Top-right controls */}
+      <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
         <Button
           size="icon"
           variant={showHistory ? 'default' : 'secondary'}
@@ -94,6 +94,11 @@ export default function Dashboard() {
         >
           <History className="w-5 h-5" />
         </Button>
+      </div>
+
+      {/* SOS button - bottom right */}
+      <div className="absolute bottom-6 right-4 z-[1000]">
+        <SOSButton />
       </div>
 
       {/* Map */}
