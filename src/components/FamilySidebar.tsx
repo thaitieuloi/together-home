@@ -2,12 +2,13 @@ import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, Copy, LogOut, Users, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { MapPin, Clock, Copy, LogOut, Users, ChevronLeft, ChevronRight, Settings, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
+import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -20,7 +21,10 @@ interface Props {
 
 export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile }: Props) {
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
+
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
   const copyInviteCode = () => {
     navigator.clipboard.writeText(family.invite_code);
@@ -116,6 +120,10 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
 
       {/* Footer */}
       <div className="p-3 border-t border-border space-y-1">
+        <Button variant="ghost" onClick={toggleTheme} className="w-full justify-start text-muted-foreground" size="sm">
+          {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
+          {theme === 'dark' ? 'Chế độ sáng' : 'Chế độ tối'}
+        </Button>
         {onOpenProfile && (
           <Button variant="ghost" onClick={onOpenProfile} className="w-full justify-start text-muted-foreground" size="sm">
             <Settings className="w-4 h-4 mr-2" /> Cài đặt
