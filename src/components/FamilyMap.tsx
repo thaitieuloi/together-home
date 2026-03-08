@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
+import { Tables } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -29,28 +33,29 @@ function createCustomIcon(initials: string, color: string) {
 interface Props {
   members: FamilyMemberWithProfile[];
   flyTo: { lat: number; lng: number } | null;
+  historyTrail?: Tables<'user_locations'>[];
 }
 
-export default function FamilyMap({ members, flyTo }: Props) {
+export default function FamilyMap({ members, flyTo, historyTrail }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null);
+  const historyLayerRef = useRef<L.LayerGroup | null>(null);
 
   const membersWithLocation = useMemo(() => members.filter((m) => m.location), [members]);
-
-  const center: [number, number] = membersWithLocation.length > 0
-    ? [membersWithLocation[0].location!.latitude, membersWithLocation[0].location!.longitude]
-    : [10.8231, 106.6297];
 
   const getInitials = (name: string) =>
     name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 
+  // Init map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
+    const defaultCenter: [number, number] = [10.8231, 106.6297];
+
     const map = L.map(mapContainerRef.current, {
       zoomControl: false,
-      center,
+      center: defaultCenter,
       zoom: 13,
     });
 
@@ -59,19 +64,27 @@ export default function FamilyMap({ members, flyTo }: Props) {
     }).addTo(map);
 
     mapRef.current = map;
-    markersLayerRef.current = L.layerGroup().addTo(map);
+    clusterGroupRef.current = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+    });
+    map.addLayer(clusterGroupRef.current);
+    historyLayerRef.current = L.layerGroup().addTo(map);
 
     return () => {
       map.remove();
       mapRef.current = null;
-      markersLayerRef.current = null;
+      clusterGroupRef.current = null;
+      historyLayerRef.current = null;
     };
-  }, [center]);
+  }, []);
 
+  // Update markers + auto-fit bounds
   useEffect(() => {
-    if (!mapRef.current || !markersLayerRef.current) return;
+    if (!mapRef.current || !clusterGroupRef.current) return;
 
-    markersLayerRef.current.clearLayers();
+    clusterGroupRef.current.clearLayers();
 
     membersWithLocation.forEach((m, i) => {
       const marker = L.marker(
@@ -91,21 +104,60 @@ export default function FamilyMap({ members, flyTo }: Props) {
         </div>
       `);
 
-      marker.addTo(markersLayerRef.current!);
+      clusterGroupRef.current!.addLayer(marker);
     });
+
+    // Auto-fit bounds
+    if (membersWithLocation.length > 1) {
+      const bounds = L.latLngBounds(
+        membersWithLocation.map((m) => [m.location!.latitude, m.location!.longitude] as [number, number])
+      );
+      mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    } else if (membersWithLocation.length === 1) {
+      const loc = membersWithLocation[0].location!;
+      mapRef.current.setView([loc.latitude, loc.longitude], 15);
+    }
   }, [membersWithLocation]);
 
+  // Fly to member
   useEffect(() => {
     if (!mapRef.current || !flyTo) return;
     mapRef.current.flyTo([flyTo.lat, flyTo.lng], 16, { duration: 1 });
   }, [flyTo]);
 
+  // Draw history trail
   useEffect(() => {
-    if (!mapRef.current || membersWithLocation.length === 0) return;
-    const first = membersWithLocation[0].location!;
-    mapRef.current.setView([first.latitude, first.longitude], mapRef.current.getZoom());
-  }, [membersWithLocation]);
+    if (!mapRef.current || !historyLayerRef.current) return;
+    historyLayerRef.current.clearLayers();
+
+    if (!historyTrail || historyTrail.length === 0) return;
+
+    const latlngs = historyTrail.map((loc) => [loc.latitude, loc.longitude] as [number, number]);
+
+    // Polyline
+    const polyline = L.polyline(latlngs, {
+      color: '#3b82f6',
+      weight: 3,
+      opacity: 0.7,
+      dashArray: '8 4',
+    });
+    historyLayerRef.current.addLayer(polyline);
+
+    // Start marker
+    const startLoc = historyTrail[historyTrail.length - 1];
+    L.circleMarker([startLoc.latitude, startLoc.longitude], {
+      radius: 6, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1,
+    }).bindPopup(`Bắt đầu: ${new Date(startLoc.timestamp).toLocaleString('vi-VN')}`).addTo(historyLayerRef.current);
+
+    // End marker
+    const endLoc = historyTrail[0];
+    L.circleMarker([endLoc.latitude, endLoc.longitude], {
+      radius: 6, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1,
+    }).bindPopup(`Kết thúc: ${new Date(endLoc.timestamp).toLocaleString('vi-VN')}`).addTo(historyLayerRef.current);
+
+    // Fit bounds to trail
+    mapRef.current.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+  }, [historyTrail]);
 
   return <div ref={mapContainerRef} className="w-full h-full" />;
 }
-
