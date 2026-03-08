@@ -26,6 +26,7 @@ export default function Dashboard() {
 
   useLocationTracking();
   usePushNotifications();
+  useSOSAlerts();
   useRealtimeLocations(members, useCallback(() => refetch(), [refetch]));
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
