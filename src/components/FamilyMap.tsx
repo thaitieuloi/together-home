@@ -9,7 +9,6 @@ import { Tables } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
-import { useFamily } from '@/hooks/useFamily';
 
 const COLORS = ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
 
@@ -53,9 +52,10 @@ interface Props {
   historyTrail?: Tables<'user_locations'>[];
   onMapClick?: (lat: number, lng: number) => void;
   showGeofences?: boolean;
+  familyId?: string;
 }
 
-export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, showGeofences }: Props) {
+export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, showGeofences, familyId }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -63,7 +63,6 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
   const historyLayerRef = useRef<L.LayerGroup | null>(null);
   const geofenceLayerRef = useRef<L.LayerGroup | null>(null);
   const markerLayerRef = useRef<L.LayerGroup | null>(null);
-  const { family } = useFamily();
 
   const membersWithLocation = useMemo(() => members.filter((m) => m.location), [members]);
 
@@ -119,13 +118,13 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
     if (!mapRef.current || !geofenceLayerRef.current) return;
     geofenceLayerRef.current.clearLayers();
 
-    if (!showGeofences || !family) return;
+    if (!showGeofences || !familyId) return;
 
     const loadGeofences = async () => {
       const { data } = await supabase
         .from('geofences')
         .select('*')
-        .eq('family_id', family.id);
+        .eq('family_id', familyId);
 
       if (!data || !geofenceLayerRef.current) return;
 
@@ -151,7 +150,7 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
     };
 
     loadGeofences();
-  }, [showGeofences, family]);
+  }, [showGeofences, familyId]);
 
   // Update markers with smooth transitions
   useEffect(() => {
