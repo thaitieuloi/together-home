@@ -1,1 +1,7 @@
 project_id = "mftfgumaftkhjwlavpxh"
+
+[functions.send-sos-notification]
+verify_jwt = false
+
+[functions.check-geofence]
+verify_jwt = false
