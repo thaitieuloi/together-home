@@ -2,7 +2,7 @@ import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, Copy, LogOut, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MapPin, Clock, Copy, LogOut, Users, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -15,9 +15,10 @@ interface Props {
   members: FamilyMemberWithProfile[];
   onMemberClick: (member: FamilyMemberWithProfile) => void;
   onSignOut: () => void;
+  onOpenProfile?: () => void;
 }
 
-export default function FamilySidebar({ family, members, onMemberClick, onSignOut }: Props) {
+export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile }: Props) {
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -114,7 +115,12 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-border space-y-1">
+        {onOpenProfile && (
+          <Button variant="ghost" onClick={onOpenProfile} className="w-full justify-start text-muted-foreground" size="sm">
+            <Settings className="w-4 h-4 mr-2" /> Cài đặt
+          </Button>
+        )}
         <Button variant="ghost" onClick={onSignOut} className="w-full justify-start text-muted-foreground" size="sm">
           <LogOut className="w-4 h-4 mr-2" /> Đăng xuất
         </Button>
