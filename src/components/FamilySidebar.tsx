@@ -115,7 +115,12 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-border space-y-1">
+        {onOpenProfile && (
+          <Button variant="ghost" onClick={onOpenProfile} className="w-full justify-start text-muted-foreground" size="sm">
+            <Settings className="w-4 h-4 mr-2" /> Cài đặt
+          </Button>
+        )}
         <Button variant="ghost" onClick={onSignOut} className="w-full justify-start text-muted-foreground" size="sm">
           <LogOut className="w-4 h-4 mr-2" /> Đăng xuất
         </Button>
