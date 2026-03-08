@@ -181,6 +181,7 @@ export default function Dashboard() {
           historyTrail={historyTrail}
           onMapClick={handleMapClick}
           showGeofences={showGeofences}
+          familyId={family.id}
         />
 
         {showHistory && (

@@ -150,7 +150,7 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
     };
 
     loadGeofences();
-  }, [showGeofences, family]);
+  }, [showGeofences, familyId]);
 
   // Update markers with smooth transitions
   useEffect(() => {
