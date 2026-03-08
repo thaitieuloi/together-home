@@ -4,6 +4,7 @@ import { useFamily } from '@/hooks/useFamily';
 import { useLocationTracking } from '@/hooks/useLocationTracking';
 import { useRealtimeLocations } from '@/hooks/useRealtimeLocations';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import FamilySidebar from '@/components/FamilySidebar';
 import FamilyMap from '@/components/FamilyMap';
 import LocationHistory from '@/components/LocationHistory';
@@ -18,6 +19,7 @@ import { Menu, History, Shield, MessageCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
+import { Badge } from '@/components/ui/badge';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
