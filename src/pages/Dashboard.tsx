@@ -123,10 +123,27 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      {/* SOS button - bottom right */}
-      <div className="absolute bottom-6 right-4 z-[1000]">
+      {/* Bottom buttons */}
+      <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
         <SOSButton />
+        <Button
+          size="icon"
+          variant={showChat ? 'default' : 'secondary'}
+          className="shadow-lg w-12 h-12 rounded-full"
+          onClick={() => setShowChat(!showChat)}
+        >
+          <MessageCircle className="w-5 h-5" />
+        </Button>
       </div>
+
+      {/* Chat */}
+      {showChat && (
+        <FamilyChat
+          familyId={family.id}
+          members={members}
+          onClose={() => setShowChat(false)}
+        />
+      )}
 
       {/* Geofence manager */}
       {showGeofences && (
