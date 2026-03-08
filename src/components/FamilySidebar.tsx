@@ -21,7 +21,10 @@ interface Props {
 
 export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile }: Props) {
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
+
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
   const copyInviteCode = () => {
     navigator.clipboard.writeText(family.invite_code);
