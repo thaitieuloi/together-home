@@ -9,11 +9,12 @@ import FamilyMap from '@/components/FamilyMap';
 import LocationHistory from '@/components/LocationHistory';
 import GeofenceManager from '@/components/GeofenceManager';
 import ProfileSettings from '@/components/ProfileSettings';
+import FamilyChat from '@/components/FamilyChat';
 import FamilySetup from '@/pages/FamilySetup';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-import { Menu, History, Shield } from 'lucide-react';
+import { Menu, History, Shield, MessageCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [showHistory, setShowHistory] = useState(false);
   const [showGeofences, setShowGeofences] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
   const [pendingGeofenceLocation, setPendingGeofenceLocation] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -121,10 +123,27 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      {/* SOS button - bottom right */}
-      <div className="absolute bottom-6 right-4 z-[1000]">
+      {/* Bottom buttons */}
+      <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
         <SOSButton />
+        <Button
+          size="icon"
+          variant={showChat ? 'default' : 'secondary'}
+          className="shadow-lg w-12 h-12 rounded-full"
+          onClick={() => setShowChat(!showChat)}
+        >
+          <MessageCircle className="w-5 h-5" />
+        </Button>
       </div>
+
+      {/* Chat */}
+      {showChat && (
+        <FamilyChat
+          familyId={family.id}
+          members={members}
+          onClose={() => setShowChat(false)}
+        />
+      )}
 
       {/* Geofence manager */}
       {showGeofences && (
