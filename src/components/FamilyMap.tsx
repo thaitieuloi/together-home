@@ -124,7 +124,7 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
       const { data } = await supabase
         .from('geofences')
         .select('*')
-        .eq('family_id', family.id);
+        .eq('family_id', familyId);
 
       if (!data || !geofenceLayerRef.current) return;
 
