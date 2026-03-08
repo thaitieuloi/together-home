@@ -52,6 +52,7 @@ interface Props {
   historyTrail?: Tables<'user_locations'>[];
   onMapClick?: (lat: number, lng: number) => void;
   showGeofences?: boolean;
+  familyId?: string;
 }
 
 export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, showGeofences }: Props) {
