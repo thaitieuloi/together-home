@@ -118,7 +118,7 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
     if (!mapRef.current || !geofenceLayerRef.current) return;
     geofenceLayerRef.current.clearLayers();
 
-    if (!showGeofences || !family) return;
+    if (!showGeofences || !familyId) return;
 
     const loadGeofences = async () => {
       const { data } = await supabase
