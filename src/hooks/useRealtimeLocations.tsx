@@ -1,38 +1,48 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { FamilyMemberWithProfile } from './useFamily';
 
 export function useRealtimeLocations(
   members: FamilyMemberWithProfile[],
-  onUpdate: () => void
+  onLocationUpdate: (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => void
 ) {
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     if (members.length === 0) return;
 
+    const memberIds = new Set(members.map((m) => m.user_id));
+
     const channel = supabase
-      .channel('location-updates')
+      .channel('latest-location-updates')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
-          table: 'user_locations',
+          table: 'latest_locations',
         },
-        () => {
-          // Debounce: only refetch once per 5 seconds max
-          if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(() => {
-            onUpdate();
-          }, 5000);
+        (payload) => {
+          const record = payload.new as {
+            user_id: string;
+            latitude: number;
+            longitude: number;
+            accuracy: number | null;
+            updated_at: string;
+          };
+          if (record && memberIds.has(record.user_id)) {
+            onLocationUpdate(
+              record.user_id,
+              record.latitude,
+              record.longitude,
+              record.accuracy,
+              record.updated_at
+            );
+          }
         }
       )
       .subscribe();
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [members.length, onUpdate]);
+  }, [members.length, onLocationUpdate]);
 }

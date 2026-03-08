@@ -11,6 +11,14 @@ import { useState } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 
+function getFreshnessInfo(timestamp: string) {
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  const diffMin = diffMs / 60000;
+  if (diffMin < 5) return { color: 'bg-green-500', label: 'Online', ring: 'ring-green-500/30' };
+  if (diffMin < 30) return { color: 'bg-yellow-500', label: 'Gần đây', ring: 'ring-yellow-500/30' };
+  return { color: 'bg-red-500', label: 'Offline', ring: 'ring-red-500/30' };
+}
+
 interface Props {
   family: Tables<'families'>;
   members: FamilyMemberWithProfile[];
@@ -42,18 +50,21 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)}>
           <ChevronRight className="w-4 h-4" />
         </Button>
-        {members.map((m, i) => (
-          <button key={m.user_id} onClick={() => onMemberClick(m)} className="relative">
-            <Avatar className="w-8 h-8">
-              <AvatarFallback className={cn('text-xs text-white', colors[i % colors.length])}>
-                {getInitials(m.profile.display_name)}
-              </AvatarFallback>
-            </Avatar>
-            {m.location && (
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-card" />
-            )}
-          </button>
-        ))}
+        {members.map((m, i) => {
+          const freshness = m.location ? getFreshnessInfo(m.location.timestamp) : null;
+          return (
+            <button key={m.user_id} onClick={() => onMemberClick(m)} className="relative">
+              <Avatar className="w-8 h-8">
+                <AvatarFallback className={cn('text-xs text-white', colors[i % colors.length])}>
+                  {getInitials(m.profile.display_name)}
+                </AvatarFallback>
+              </Avatar>
+              {freshness && (
+                <span className={cn('absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card', freshness.color)} />
+              )}
+            </button>
+          );
+        })}
       </div>
     );
   }
@@ -86,36 +97,50 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
         <p className="text-xs font-medium text-muted-foreground px-2 py-1 uppercase tracking-wider">
           Thành viên ({members.length})
         </p>
-        {members.map((m, i) => (
-          <button
-            key={m.user_id}
-            onClick={() => onMemberClick(m)}
-            className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors text-left"
-          >
-            <div className="relative">
-              <Avatar className="w-10 h-10">
-                <AvatarFallback className={cn('text-sm font-medium text-white', colors[i % colors.length])}>
-                  {getInitials(m.profile.display_name)}
-                </AvatarFallback>
-              </Avatar>
-              {m.location && (
-                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{m.profile.display_name}</p>
-              {m.location ? (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {formatDistanceToNow(new Date(m.location.timestamp), { addSuffix: true, locale: vi })}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Chưa có vị trí</p>
-              )}
-            </div>
-            {m.location && <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />}
-          </button>
-        ))}
+        {members.map((m, i) => {
+          const freshness = m.location ? getFreshnessInfo(m.location.timestamp) : null;
+          return (
+            <button
+              key={m.user_id}
+              onClick={() => onMemberClick(m)}
+              className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors text-left"
+            >
+              <div className="relative">
+                <Avatar className={cn('w-10 h-10', freshness ? `ring-2 ${freshness.ring}` : '')}>
+                  <AvatarFallback className={cn('text-sm font-medium text-white', colors[i % colors.length])}>
+                    {getInitials(m.profile.display_name)}
+                  </AvatarFallback>
+                </Avatar>
+                {freshness && (
+                  <span className={cn('absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card', freshness.color)} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground truncate">{m.profile.display_name}</p>
+                  {freshness && (
+                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                      freshness.color === 'bg-green-500' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                      freshness.color === 'bg-yellow-500' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
+                      'bg-red-500/10 text-red-600 dark:text-red-400'
+                    )}>
+                      {freshness.label}
+                    </span>
+                  )}
+                </div>
+                {m.location ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {formatDistanceToNow(new Date(m.location.timestamp), { addSuffix: true, locale: vi })}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Chưa có vị trí</p>
+                )}
+              </div>
+              {m.location && <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />}
+            </button>
+          );
+        })}
       </div>
 
       {/* Footer */}

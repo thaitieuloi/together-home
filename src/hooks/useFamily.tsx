@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { Tables } from '@/integrations/supabase/types';
@@ -7,7 +7,12 @@ export interface FamilyMemberWithProfile {
   user_id: string;
   role: string;
   profile: Tables<'profiles'>;
-  location?: Tables<'user_locations'> | null;
+  location?: {
+    latitude: number;
+    longitude: number;
+    accuracy: number | null;
+    timestamp: string;
+  } | null;
 }
 
 export function useFamily() {
@@ -16,7 +21,7 @@ export function useFamily() {
   const [members, setMembers] = useState<FamilyMemberWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchFamily = async () => {
+  const fetchFamily = useCallback(async () => {
     if (!user) return;
     setLoading(true);
 
@@ -44,39 +49,68 @@ export function useFamily() {
 
     setFamily(familyData);
 
-    // Get members with profiles
+    // Get all members in one query
     const { data: membersData } = await supabase
       .from('family_members')
       .select('user_id, role')
       .eq('family_id', membership.family_id);
 
-    if (membersData) {
-      const memberProfiles: FamilyMemberWithProfile[] = [];
-      for (const m of membersData) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', m.user_id)
-          .single();
-
-        // Get latest location
-        const { data: location } = await supabase
-          .from('user_locations')
-          .select('*')
-          .eq('user_id', m.user_id)
-          .order('timestamp', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (profile) {
-          memberProfiles.push({ ...m, profile, location });
-        }
-      }
-      setMembers(memberProfiles);
+    if (!membersData || membersData.length === 0) {
+      setMembers([]);
+      setLoading(false);
+      return;
     }
 
+    const userIds = membersData.map((m) => m.user_id);
+
+    // Batch fetch: profiles + latest_locations in parallel
+    const [profilesRes, locationsRes] = await Promise.all([
+      supabase.from('profiles').select('*').in('user_id', userIds),
+      supabase.from('latest_locations').select('*').in('user_id', userIds),
+    ]);
+
+    const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p]));
+    const locationMap = new Map((locationsRes.data ?? []).map((l) => [l.user_id, l]));
+
+    const memberProfiles: FamilyMemberWithProfile[] = [];
+    for (const m of membersData) {
+      const profile = profileMap.get(m.user_id);
+      if (!profile) continue;
+
+      const loc = locationMap.get(m.user_id);
+      memberProfiles.push({
+        ...m,
+        profile,
+        location: loc
+          ? {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              accuracy: loc.accuracy,
+              timestamp: loc.updated_at,
+            }
+          : null,
+      });
+    }
+
+    setMembers(memberProfiles);
     setLoading(false);
-  };
+  }, [user]);
+
+  const updateMemberLocation = useCallback(
+    (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === userId
+            ? {
+                ...m,
+                location: { latitude: lat, longitude: lng, accuracy, timestamp: updatedAt },
+              }
+            : m
+        )
+      );
+    },
+    []
+  );
 
   const createFamily = async (name: string) => {
     if (!user) return;
@@ -88,7 +122,6 @@ export function useFamily() {
 
     if (error) throw error;
 
-    // Add creator as admin
     await supabase.from('family_members').insert({
       family_id: newFamily.id,
       user_id: user.id,
@@ -102,10 +135,7 @@ export function useFamily() {
   const joinFamily = async (inviteCode: string) => {
     if (!user) return;
 
-    // Find family by invite code - use RPC or direct query
-    // Since RLS blocks non-members, we need a workaround
-    // We'll use an edge function or a more permissive approach
-    const { data: familyData, error: findError } = await supabase
+    const { data: familyData } = await supabase
       .from('families')
       .select('id')
       .eq('invite_code', inviteCode)
@@ -127,7 +157,7 @@ export function useFamily() {
 
   useEffect(() => {
     fetchFamily();
-  }, [user]);
+  }, [fetchFamily]);
 
-  return { family, members, loading, createFamily, joinFamily, refetch: fetchFamily };
+  return { family, members, loading, createFamily, joinFamily, refetch: fetchFamily, updateMemberLocation };
 }

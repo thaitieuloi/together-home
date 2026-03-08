@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
@@ -13,18 +13,33 @@ import { useFamily } from '@/hooks/useFamily';
 
 const COLORS = ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
 
-function createCustomIcon(initials: string, color: string) {
+function getFreshnessColor(timestamp: string): { dot: string; label: string } {
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  const diffMin = diffMs / 60000;
+  if (diffMin < 5) return { dot: '#22c55e', label: 'Online' };
+  if (diffMin < 30) return { dot: '#f59e0b', label: 'Gần đây' };
+  return { dot: '#ef4444', label: 'Offline' };
+}
+
+function createCustomIcon(initials: string, color: string, freshnessColor: string) {
   return L.divIcon({
     className: 'custom-marker',
     html: `
-      <div style="
-        width: 40px; height: 40px; border-radius: 50%;
-        background: ${color}; border: 3px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        display: flex; align-items: center; justify-content: center;
-        color: white; font-weight: 600; font-size: 14px;
-        font-family: system-ui, sans-serif;
-      ">${initials}</div>
+      <div style="position:relative; width:40px; height:40px;">
+        <div style="
+          width: 40px; height: 40px; border-radius: 50%;
+          background: ${color}; border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          display: flex; align-items: center; justify-content: center;
+          color: white; font-weight: 600; font-size: 14px;
+          font-family: system-ui, sans-serif;
+        ">${initials}</div>
+        <span style="
+          position:absolute; bottom:-2px; right:-2px;
+          width:12px; height:12px; border-radius:50%;
+          background:${freshnessColor}; border:2px solid white;
+        "></span>
+      </div>
     `,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
@@ -43,9 +58,11 @@ interface Props {
 export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, showGeofences }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const accuracyCirclesRef = useRef<Map<string, L.Circle>>(new Map());
   const historyLayerRef = useRef<L.LayerGroup | null>(null);
   const geofenceLayerRef = useRef<L.LayerGroup | null>(null);
+  const markerLayerRef = useRef<L.LayerGroup | null>(null);
   const { family } = useFamily();
 
   const membersWithLocation = useMemo(() => members.filter((m) => m.location), [members]);
@@ -70,21 +87,18 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
     }).addTo(map);
 
     mapRef.current = map;
-    clusterGroupRef.current = L.markerClusterGroup({
-      maxClusterRadius: 50,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-    });
-    map.addLayer(clusterGroupRef.current);
+    markerLayerRef.current = L.layerGroup().addTo(map);
     historyLayerRef.current = L.layerGroup().addTo(map);
     geofenceLayerRef.current = L.layerGroup().addTo(map);
 
     return () => {
       map.remove();
       mapRef.current = null;
-      clusterGroupRef.current = null;
+      markerLayerRef.current = null;
       historyLayerRef.current = null;
       geofenceLayerRef.current = null;
+      markersRef.current.clear();
+      accuracyCirclesRef.current.clear();
     };
   }, []);
 
@@ -139,42 +153,114 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
     loadGeofences();
   }, [showGeofences, family]);
 
-  // Update markers + auto-fit bounds
+  // Update markers with smooth transitions
   useEffect(() => {
-    if (!mapRef.current || !clusterGroupRef.current) return;
+    if (!mapRef.current || !markerLayerRef.current) return;
 
-    clusterGroupRef.current.clearLayers();
+    const existingIds = new Set(markersRef.current.keys());
+    const currentIds = new Set(membersWithLocation.map((m) => m.user_id));
+
+    // Remove markers for members no longer present
+    for (const id of existingIds) {
+      if (!currentIds.has(id)) {
+        const marker = markersRef.current.get(id);
+        if (marker) markerLayerRef.current.removeLayer(marker);
+        markersRef.current.delete(id);
+
+        const circle = accuracyCirclesRef.current.get(id);
+        if (circle) markerLayerRef.current.removeLayer(circle);
+        accuracyCirclesRef.current.delete(id);
+      }
+    }
+
+    let hasFittedBounds = false;
 
     membersWithLocation.forEach((m, i) => {
-      const marker = L.marker(
-        [m.location!.latitude, m.location!.longitude],
-        { icon: createCustomIcon(getInitials(m.profile.display_name), COLORS[i % COLORS.length]) }
+      const loc = m.location!;
+      const latlng: [number, number] = [loc.latitude, loc.longitude];
+      const freshness = getFreshnessColor(loc.timestamp);
+      const icon = createCustomIcon(
+        getInitials(m.profile.display_name),
+        COLORS[i % COLORS.length],
+        freshness.dot
       );
 
-      marker.bindPopup(`
+      const popupContent = `
         <div style="text-align:center; min-width:120px;">
           <p style="margin:0; font-weight:600; font-size:14px;">${m.profile.display_name}</p>
-          <p style="margin:4px 0 0; font-size:12px; color:#6b7280;">
-            ${formatDistanceToNow(new Date(m.location!.timestamp), { addSuffix: true, locale: vi })}
+          <p style="margin:4px 0 0; font-size:12px; color:${freshness.dot}; font-weight:500;">
+            ● ${freshness.label}
           </p>
-          <p style="margin:2px 0 0; font-size:12px; color:#9ca3af;">
-            ${m.location!.latitude.toFixed(5)}, ${m.location!.longitude.toFixed(5)}
+          <p style="margin:2px 0 0; font-size:12px; color:#6b7280;">
+            ${formatDistanceToNow(new Date(loc.timestamp), { addSuffix: true, locale: vi })}
           </p>
+          ${loc.accuracy ? `<p style="margin:2px 0 0; font-size:11px; color:#9ca3af;">±${Math.round(loc.accuracy)}m</p>` : ''}
         </div>
-      `);
+      `;
 
-      clusterGroupRef.current!.addLayer(marker);
+      const existingMarker = markersRef.current.get(m.user_id);
+      if (existingMarker) {
+        // Smooth transition: update position
+        existingMarker.setLatLng(latlng);
+        existingMarker.setIcon(icon);
+        existingMarker.setPopupContent(popupContent);
+
+        // Update accuracy circle
+        const existingCircle = accuracyCirclesRef.current.get(m.user_id);
+        if (loc.accuracy && loc.accuracy <= 100) {
+          if (existingCircle) {
+            existingCircle.setLatLng(latlng);
+            existingCircle.setRadius(loc.accuracy);
+          } else {
+            const circle = L.circle(latlng, {
+              radius: loc.accuracy,
+              color: COLORS[i % COLORS.length],
+              fillColor: COLORS[i % COLORS.length],
+              fillOpacity: 0.08,
+              weight: 1,
+              opacity: 0.3,
+            });
+            markerLayerRef.current!.addLayer(circle);
+            accuracyCirclesRef.current.set(m.user_id, circle);
+          }
+        } else if (existingCircle) {
+          markerLayerRef.current!.removeLayer(existingCircle);
+          accuracyCirclesRef.current.delete(m.user_id);
+        }
+      } else {
+        // New marker
+        const marker = L.marker(latlng, { icon });
+        marker.bindPopup(popupContent);
+        markerLayerRef.current!.addLayer(marker);
+        markersRef.current.set(m.user_id, marker);
+
+        // Accuracy circle
+        if (loc.accuracy && loc.accuracy <= 100) {
+          const circle = L.circle(latlng, {
+            radius: loc.accuracy,
+            color: COLORS[i % COLORS.length],
+            fillColor: COLORS[i % COLORS.length],
+            fillOpacity: 0.08,
+            weight: 1,
+            opacity: 0.3,
+          });
+          markerLayerRef.current!.addLayer(circle);
+          accuracyCirclesRef.current.set(m.user_id, circle);
+        }
+      }
     });
 
-    // Auto-fit bounds
-    if (membersWithLocation.length > 1) {
-      const bounds = L.latLngBounds(
-        membersWithLocation.map((m) => [m.location!.latitude, m.location!.longitude] as [number, number])
-      );
-      mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-    } else if (membersWithLocation.length === 1) {
-      const loc = membersWithLocation[0].location!;
-      mapRef.current.setView([loc.latitude, loc.longitude], 15);
+    // Auto-fit bounds only on first load
+    if (!hasFittedBounds && membersWithLocation.length > 0) {
+      if (membersWithLocation.length > 1) {
+        const bounds = L.latLngBounds(
+          membersWithLocation.map((m) => [m.location!.latitude, m.location!.longitude] as [number, number])
+        );
+        mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      } else {
+        const loc = membersWithLocation[0].location!;
+        mapRef.current.setView([loc.latitude, loc.longitude], 15);
+      }
     }
   }, [membersWithLocation]);
 

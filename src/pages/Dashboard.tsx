@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
-  const { family, members, loading, refetch } = useFamily();
+  const { family, members, loading, refetch, updateMemberLocation } = useFamily();
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -36,7 +36,16 @@ export default function Dashboard() {
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
-  useRealtimeLocations(members, useCallback(() => refetch(), [refetch]));
+
+  // Realtime: direct payload update instead of full refetch
+  const handleRealtimeLocation = useCallback(
+    (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
+      updateMemberLocation(userId, lat, lng, accuracy, updatedAt);
+    },
+    [updateMemberLocation]
+  );
+  useRealtimeLocations(members, handleRealtimeLocation);
+
   const { unreadCount } = useUnreadMessages(family?.id, showChat);
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
