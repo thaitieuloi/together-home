@@ -129,14 +129,21 @@ export default function Dashboard() {
       {/* Bottom buttons */}
       <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
         <SOSButton />
-        <Button
-          size="icon"
-          variant={showChat ? 'default' : 'secondary'}
-          className="shadow-lg w-12 h-12 rounded-full"
-          onClick={() => setShowChat(!showChat)}
-        >
-          <MessageCircle className="w-5 h-5" />
-        </Button>
+        <div className="relative">
+          <Button
+            size="icon"
+            variant={showChat ? 'default' : 'secondary'}
+            className="shadow-lg w-12 h-12 rounded-full"
+            onClick={() => setShowChat(!showChat)}
+          >
+            <MessageCircle className="w-5 h-5" />
+          </Button>
+          {unreadCount > 0 && !showChat && (
+            <Badge className="absolute -top-1 -right-1 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-card rounded-full">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Chat */}
