@@ -25,6 +25,7 @@ export function useFamily() {
       .from('family_members')
       .select('family_id, role')
       .eq('user_id', user.id)
+      .limit(1)
       .maybeSingle();
 
     if (!membership) {
