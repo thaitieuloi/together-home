@@ -7,11 +7,13 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import FamilySidebar from '@/components/FamilySidebar';
 import FamilyMap from '@/components/FamilyMap';
 import LocationHistory from '@/components/LocationHistory';
+import GeofenceManager from '@/components/GeofenceManager';
+import ProfileSettings from '@/components/ProfileSettings';
 import FamilySetup from '@/pages/FamilySetup';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-import { Menu, History } from 'lucide-react';
+import { Menu, History, Shield } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
@@ -22,7 +24,10 @@ export default function Dashboard() {
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showGeofences, setShowGeofences] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
+  const [pendingGeofenceLocation, setPendingGeofenceLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useLocationTracking();
   usePushNotifications();
@@ -41,6 +46,12 @@ export default function Dashboard() {
     setHistoryTrail([]);
   };
 
+  const handleMapClick = (lat: number, lng: number) => {
+    if (showGeofences) {
+      setPendingGeofenceLocation({ lat, lng });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -53,6 +64,10 @@ export default function Dashboard() {
     return <FamilySetup />;
   }
 
+  if (showProfile) {
+    return <ProfileSettings onBack={() => setShowProfile(false)} />;
+  }
+
   return (
     <div className="flex h-screen w-full overflow-hidden">
       {/* Desktop sidebar */}
@@ -62,6 +77,7 @@ export default function Dashboard() {
           members={members}
           onMemberClick={handleMemberClick}
           onSignOut={signOut}
+          onOpenProfile={() => setShowProfile(true)}
         />
       </div>
 
@@ -79,6 +95,7 @@ export default function Dashboard() {
               members={members}
               onMemberClick={handleMemberClick}
               onSignOut={signOut}
+              onOpenProfile={() => { setShowProfile(true); setMobileOpen(false); }}
             />
           </SheetContent>
         </Sheet>
@@ -94,6 +111,14 @@ export default function Dashboard() {
         >
           <History className="w-5 h-5" />
         </Button>
+        <Button
+          size="icon"
+          variant={showGeofences ? 'default' : 'secondary'}
+          className="shadow-lg"
+          onClick={() => setShowGeofences(!showGeofences)}
+        >
+          <Shield className="w-5 h-5" />
+        </Button>
       </div>
 
       {/* SOS button - bottom right */}
@@ -101,9 +126,24 @@ export default function Dashboard() {
         <SOSButton />
       </div>
 
+      {/* Geofence manager */}
+      {showGeofences && (
+        <GeofenceManager
+          onClose={() => setShowGeofences(false)}
+          pendingLocation={pendingGeofenceLocation}
+          onClearPending={() => setPendingGeofenceLocation(null)}
+        />
+      )}
+
       {/* Map */}
       <div className="flex-1 relative">
-        <FamilyMap members={members} flyTo={flyTo} historyTrail={historyTrail} />
+        <FamilyMap
+          members={members}
+          flyTo={flyTo}
+          historyTrail={historyTrail}
+          onMapClick={handleMapClick}
+          showGeofences={showGeofences}
+        />
 
         {showHistory && (
           <LocationHistory
