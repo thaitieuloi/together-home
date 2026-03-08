@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFamily } from '@/hooks/useFamily';
 import { useLocationTracking } from '@/hooks/useLocationTracking';
 import { useRealtimeLocations } from '@/hooks/useRealtimeLocations';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import FamilySidebar from '@/components/FamilySidebar';
 import FamilyMap from '@/components/FamilyMap';
 import LocationHistory from '@/components/LocationHistory';
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
 
   useLocationTracking();
+  usePushNotifications();
   useRealtimeLocations(members, useCallback(() => refetch(), [refetch]));
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
