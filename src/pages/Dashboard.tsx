@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
 
   useLocationTracking();
+  usePushNotifications();
   useRealtimeLocations(members, useCallback(() => refetch(), [refetch]));
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
