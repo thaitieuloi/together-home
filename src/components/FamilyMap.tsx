@@ -55,7 +55,7 @@ interface Props {
   familyId?: string;
 }
 
-export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, showGeofences }: Props) {
+export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, showGeofences, familyId }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -63,7 +63,6 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
   const historyLayerRef = useRef<L.LayerGroup | null>(null);
   const geofenceLayerRef = useRef<L.LayerGroup | null>(null);
   const markerLayerRef = useRef<L.LayerGroup | null>(null);
-  const { family } = useFamily();
 
   const membersWithLocation = useMemo(() => members.filter((m) => m.location), [members]);
 
