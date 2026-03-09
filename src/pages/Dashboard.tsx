@@ -24,6 +24,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import NotificationPanel from '@/components/NotificationPanel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import PageTransition from '@/components/PageTransition';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
@@ -85,11 +86,19 @@ export default function Dashboard() {
   }
 
   if (showProfile) {
-    return <ProfileSettings onBack={() => setShowProfile(false)} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />;
+    return (
+      <PageTransition>
+        <ProfileSettings onBack={() => setShowProfile(false)} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />
+      </PageTransition>
+    );
   }
 
   if (showGeofenceSettings) {
-    return <GeofenceSettings onBack={() => setShowGeofenceSettings(false)} />;
+    return (
+      <PageTransition>
+        <GeofenceSettings onBack={() => setShowGeofenceSettings(false)} />
+      </PageTransition>
+    );
   }
 
   return (
