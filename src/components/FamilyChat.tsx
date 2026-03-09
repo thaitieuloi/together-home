@@ -206,7 +206,7 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
   };
 
   return (
-    <div className="absolute bottom-20 left-2 right-2 md:left-auto md:right-20 z-[1000] md:w-80 h-[70vh] md:h-[28rem] glass glass-dark rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
+    <div className="absolute bottom-20 left-2 right-2 md:left-auto md:right-20 z-[1000] md:w-80 h-[70vh] md:h-[28rem] glass glass-dark rounded-2xl shadow-2xl flex flex-col overflow-hidden">
       <div className="p-3 border-b border-border/50 flex items-center justify-between">
         <span className="font-semibold text-sm text-foreground">💬 Chat gia đình</span>
         <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={onClose}>
