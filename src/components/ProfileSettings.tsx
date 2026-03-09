@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save, Loader2, User } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Bell } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect } from 'react';
 
 interface Props {
   onBack: () => void;
+  onOpenGeofenceSettings?: () => void;
 }
 
 export default function ProfileSettings({ onBack }: Props) {
