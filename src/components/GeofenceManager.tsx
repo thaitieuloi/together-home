@@ -99,7 +99,7 @@ export default function GeofenceManager({ onClose, pendingLocation, onClearPendi
   };
 
   return (
-    <div className="absolute top-16 right-4 z-[1000] bg-card border border-border rounded-xl shadow-xl w-80 max-h-[70vh] flex flex-col">
+    <div className="absolute top-16 right-4 z-[1000] bg-card border border-border rounded-xl shadow-xl w-80 max-h-[70vh] flex flex-col animate-scale-in">
       <div className="p-3 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-primary" />
