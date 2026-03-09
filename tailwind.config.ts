@@ -95,7 +95,11 @@ export default {
         "slide-in-left": {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(0)" },
+        "bounce-subtle": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.15)" },
         },
+      },
         "slide-out-left": {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(-100%)" },
@@ -121,6 +125,7 @@ export default {
         "slide-in-left": "slide-in-left 0.3s ease-out",
         "slide-out-left": "slide-out-left 0.3s ease-out",
         "pulse-gentle": "pulse-gentle 2s ease-in-out infinite",
+        "bounce-subtle": "bounce-subtle 0.6s ease-in-out",
         "enter": "fade-in 0.3s ease-out, scale-in 0.2s ease-out",
         "exit": "fade-out 0.3s ease-out, scale-out 0.2s ease-out",
       },

@@ -25,9 +25,10 @@ interface Props {
   onMemberClick: (member: FamilyMemberWithProfile) => void;
   onSignOut: () => void;
   onOpenProfile?: () => void;
+  recentlyUpdated?: Set<string>;
 }
 
-export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile }: Props) {
+export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile, recentlyUpdated = new Set() }: Props) {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
@@ -52,9 +53,10 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
         </Button>
         {members.map((m, i) => {
           const freshness = m.location ? getFreshnessInfo(m.location.timestamp) : null;
+          const isUpdated = recentlyUpdated.has(m.user_id);
           return (
             <button key={m.user_id} onClick={() => onMemberClick(m)} className="relative group">
-              <Avatar className="w-8 h-8 transition-transform duration-200 group-hover:scale-110">
+              <Avatar className={cn('w-8 h-8 transition-transform duration-200 group-hover:scale-110', isUpdated && 'animate-bounce-subtle')}>
                 <AvatarFallback className={cn('text-xs text-white', colors[i % colors.length])}>
                   {getInitials(m.profile.display_name)}
                 </AvatarFallback>
@@ -101,6 +103,7 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
         </p>
         {members.map((m, i) => {
           const freshness = m.location ? getFreshnessInfo(m.location.timestamp) : null;
+          const isUpdated = recentlyUpdated.has(m.user_id);
           return (
             <button
               key={m.user_id}
@@ -108,7 +111,7 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
               className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/80 transition-all duration-200 text-left group"
             >
               <div className="relative">
-                <Avatar className={cn('w-10 h-10 transition-transform duration-200 group-hover:scale-105', freshness ? `ring-2 ${freshness.ring}` : '')}>
+                <Avatar className={cn('w-10 h-10 transition-transform duration-200 group-hover:scale-105', freshness ? `ring-2 ${freshness.ring}` : '', isUpdated && 'animate-bounce-subtle ring-2 ring-primary/50')}>
                   <AvatarFallback className={cn('text-sm font-medium text-white', colors[i % colors.length])}>
                     {getInitials(m.profile.display_name)}
                   </AvatarFallback>
