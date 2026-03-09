@@ -15,7 +15,7 @@ interface Props {
   onOpenGeofenceSettings?: () => void;
 }
 
-export default function ProfileSettings({ onBack }: Props) {
+export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [displayName, setDisplayName] = useState('');
