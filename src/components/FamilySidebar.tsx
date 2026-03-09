@@ -25,6 +25,7 @@ interface Props {
   onMemberClick: (member: FamilyMemberWithProfile) => void;
   onSignOut: () => void;
   onOpenProfile?: () => void;
+  recentlyUpdated?: Set<string>;
 }
 
 export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile }: Props) {
