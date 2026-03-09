@@ -19,7 +19,6 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Fetch notifications
   useEffect(() => {
     if (!user) return;
 
@@ -39,7 +38,6 @@ export function useNotifications() {
 
     fetchNotifications();
 
-    // Realtime subscription for new notifications
     const channel = supabase
       .channel('user-notifications')
       .on(
@@ -55,7 +53,6 @@ export function useNotifications() {
           setNotifications((prev) => [newNotif, ...prev]);
           setUnreadCount((prev) => prev + 1);
 
-          // Show toast for new notification
           toast({
             title: newNotif.title,
             description: newNotif.body,
@@ -88,5 +85,24 @@ export function useNotifications() {
     setUnreadCount(0);
   }, [user]);
 
-  return { notifications, unreadCount, markAsRead, markAllAsRead };
+  const deleteNotification = useCallback(async (id: string) => {
+    const notif = notifications.find((n) => n.id === id);
+    await supabase.from('notifications').delete().eq('id', id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (notif && !notif.read) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+  }, [notifications]);
+
+  const clearAllRead = useCallback(async () => {
+    if (!user) return;
+    await supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('read', true);
+    setNotifications((prev) => prev.filter((n) => !n.read));
+  }, [user]);
+
+  return { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAllRead };
 }
