@@ -42,7 +42,7 @@ export default function Dashboard() {
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
-  const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead, deleteNotification, clearAllRead } = useNotifications();
 
   // Realtime: direct payload update instead of full refetch
   const handleRealtimeLocation = useCallback(
