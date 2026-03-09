@@ -31,6 +31,7 @@ export default function Dashboard() {
   const { signOut } = useAuth();
   const { family, members, loading, refetch, updateMemberLocation } = useFamily();
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
+  const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showGeofences, setShowGeofences] = useState(false);
