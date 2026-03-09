@@ -70,7 +70,7 @@ export function useLocationTracking() {
 
       lastLocationRef.current = { lat, lng, time: now };
 
-      // Batch write: upsert latest_locations + insert user_locations
+      // Batch write: upsert latest_locations + insert user_locations + check geofence
       try {
         await Promise.all([
           supabase.from('latest_locations').upsert({
@@ -87,6 +87,9 @@ export function useLocationTracking() {
             latitude: lat,
             longitude: lng,
             accuracy,
+          }),
+          supabase.functions.invoke('check-geofence', {
+            body: { user_id: user.id, latitude: lat, longitude: lng },
           }),
         ]);
 

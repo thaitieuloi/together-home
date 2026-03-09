@@ -19,7 +19,10 @@ import { Menu, History, Shield, MessageCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
+import { useNotifications } from '@/hooks/useNotifications';
+import NotificationPanel from '@/components/NotificationPanel';
 import { Badge } from '@/components/ui/badge';
+import { Bell } from 'lucide-react';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
