@@ -182,16 +182,18 @@ export default function Dashboard() {
       </div>
 
       {/* Notification panel */}
-      {showNotifications && (
-        <NotificationPanel
-          notifications={notifications}
-          onMarkAsRead={markAsRead}
-          onMarkAllAsRead={markAllAsRead}
-          onDelete={deleteNotification}
-          onClearAllRead={clearAllRead}
-          onClose={() => setShowNotifications(false)}
-        />
-      )}
+      <AnimatedPanel open={showNotifications} onClose={() => setShowNotifications(false)}>
+        {(handleClose) => (
+          <NotificationPanel
+            notifications={notifications}
+            onMarkAsRead={markAsRead}
+            onMarkAllAsRead={markAllAsRead}
+            onDelete={deleteNotification}
+            onClearAllRead={clearAllRead}
+            onClose={handleClose}
+          />
+        )}
+      </AnimatedPanel>
 
       {/* Bottom buttons */}
       <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
