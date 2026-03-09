@@ -39,6 +39,8 @@ export default function Dashboard() {
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
   const [pendingGeofenceLocation, setPendingGeofenceLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [exitingProfile, setExitingProfile] = useState(false);
+  const [exitingGeofence, setExitingGeofence] = useState(false);
 
   useLocationTracking();
   usePushNotifications();
