@@ -53,9 +53,10 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
         </Button>
         {members.map((m, i) => {
           const freshness = m.location ? getFreshnessInfo(m.location.timestamp) : null;
+          const isUpdated = recentlyUpdated.has(m.user_id);
           return (
             <button key={m.user_id} onClick={() => onMemberClick(m)} className="relative group">
-              <Avatar className="w-8 h-8 transition-transform duration-200 group-hover:scale-110">
+              <Avatar className={cn('w-8 h-8 transition-transform duration-200 group-hover:scale-110', isUpdated && 'animate-bounce-subtle')}>
                 <AvatarFallback className={cn('text-xs text-white', colors[i % colors.length])}>
                   {getInitials(m.profile.display_name)}
                 </AvatarFallback>
