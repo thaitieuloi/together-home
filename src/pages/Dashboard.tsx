@@ -185,7 +185,7 @@ export default function Dashboard() {
         <Button
           size="icon"
           variant={showGeofences ? 'default' : 'secondary'}
-          className={cn('shadow-lg rounded-full transition-all duration-200', !showGeofences && 'glass glass-dark')}
+          className={cn('shadow-lg rounded-full transition-all duration-200', !geoMounted && 'glass glass-dark')}
           onClick={() => setShowGeofences(!showGeofences)}
         >
           <Shield className="w-5 h-5" />
