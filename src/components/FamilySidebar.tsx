@@ -26,6 +26,7 @@ interface Props {
   onSignOut: () => void;
   onOpenProfile?: () => void;
   recentlyUpdated?: Set<string>;
+  liveSharingUserIds?: Set<string>;
 }
 
 export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile, recentlyUpdated = new Set() }: Props) {
