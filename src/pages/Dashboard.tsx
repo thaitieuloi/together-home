@@ -86,7 +86,11 @@ export default function Dashboard() {
   }
 
   if (showProfile) {
-    return <ProfileSettings onBack={() => setShowProfile(false)} />;
+    return <ProfileSettings onBack={() => setShowProfile(false)} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />;
+  }
+
+  if (showGeofenceSettings) {
+    return <GeofenceSettings onBack={() => setShowGeofenceSettings(false)} />;
   }
 
   return (
