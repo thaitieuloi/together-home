@@ -25,6 +25,7 @@ import NotificationPanel from '@/components/NotificationPanel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import PageTransition from '@/components/PageTransition';
+import AnimatedPanel from '@/components/AnimatedPanel';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
@@ -41,6 +42,14 @@ export default function Dashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [exitingProfile, setExitingProfile] = useState(false);
   const [exitingGeofence, setExitingGeofence] = useState(false);
+
+  // Panel exit states
+  const [chatMounted, setChatMounted] = useState(false);
+  const [chatVisible, setChatVisible] = useState(true);
+  const [notifMounted, setNotifMounted] = useState(false);
+  const [notifVisible, setNotifVisible] = useState(true);
+  const [geoMounted, setGeoMounted] = useState(false);
+  const [geoVisible, setGeoVisible] = useState(true);
 
   useLocationTracking();
   usePushNotifications();
