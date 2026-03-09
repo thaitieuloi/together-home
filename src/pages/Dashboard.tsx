@@ -137,6 +137,7 @@ export default function Dashboard() {
           onSignOut={signOut}
           onOpenProfile={() => setShowProfile(true)}
           recentlyUpdated={recentlyUpdated}
+          liveSharingUserIds={liveSharingUserIds}
         />
       </div>
 
