@@ -128,6 +128,19 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
             </Button>
           </CardContent>
         </Card>
+
+        {onOpenGeofenceSettings && (
+          <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={onOpenGeofenceSettings}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <Bell className="w-5 h-5 text-primary" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">Thông báo vùng an toàn</p>
+                <p className="text-xs text-muted-foreground">Bật/tắt thông báo và xem lịch sử</p>
+              </div>
+              <ArrowLeft className="w-4 h-4 text-muted-foreground rotate-180" />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
