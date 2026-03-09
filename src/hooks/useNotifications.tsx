@@ -53,6 +53,18 @@ export function useNotifications() {
           setNotifications((prev) => [newNotif, ...prev]);
           setUnreadCount((prev) => prev + 1);
 
+          // Vibrate on mobile if supported
+          if ('vibrate' in navigator) {
+            navigator.vibrate(newNotif.type === 'sos' ? [200, 100, 200, 100, 200] : [200, 50, 200]);
+          }
+
+          // Play notification sound
+          try {
+            const audio = new Audio('/notification.mp3');
+            audio.volume = 0.5;
+            audio.play().catch(() => {});
+          } catch {}
+
           toast({
             title: newNotif.title,
             description: newNotif.body,
