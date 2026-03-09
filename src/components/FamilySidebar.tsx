@@ -28,7 +28,7 @@ interface Props {
   recentlyUpdated?: Set<string>;
 }
 
-export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile }: Props) {
+export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile, recentlyUpdated = new Set() }: Props) {
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
