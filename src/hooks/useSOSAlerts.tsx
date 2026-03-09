@@ -31,6 +31,18 @@ export function useSOSAlerts() {
             .eq('user_id', alert.user_id)
             .single();
 
+          // Vibrate urgently on mobile
+          if ('vibrate' in navigator) {
+            navigator.vibrate([300, 100, 300, 100, 300, 100, 300]);
+          }
+
+          // Play urgent SOS sound
+          try {
+            const audio = new Audio('/notification.mp3');
+            audio.volume = 1.0;
+            audio.play().catch(() => {});
+          } catch {}
+
           toast({
             title: '🆘 SOS Khẩn cấp!',
             description: `${profile?.display_name || 'Thành viên'} cần giúp đỡ! Vị trí: ${alert.latitude.toFixed(4)}, ${alert.longitude.toFixed(4)}`,
