@@ -85,18 +85,29 @@ export default function Dashboard() {
     return <FamilySetup />;
   }
 
+  const [exitingProfile, setExitingProfile] = useState(false);
+  const [exitingGeofence, setExitingGeofence] = useState(false);
+
+  const handleBackFromProfile = () => {
+    setExitingProfile(true);
+  };
+
+  const handleBackFromGeofence = () => {
+    setExitingGeofence(true);
+  };
+
   if (showProfile) {
     return (
-      <PageTransition>
-        <ProfileSettings onBack={() => setShowProfile(false)} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />
+      <PageTransition show={!exitingProfile} onExitComplete={() => { setShowProfile(false); setExitingProfile(false); }}>
+        <ProfileSettings onBack={handleBackFromProfile} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />
       </PageTransition>
     );
   }
 
   if (showGeofenceSettings) {
     return (
-      <PageTransition>
-        <GeofenceSettings onBack={() => setShowGeofenceSettings(false)} />
+      <PageTransition show={!exitingGeofence} onExitComplete={() => { setShowGeofenceSettings(false); setExitingGeofence(false); }}>
+        <GeofenceSettings onBack={handleBackFromGeofence} />
       </PageTransition>
     );
   }
