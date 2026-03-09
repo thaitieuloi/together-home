@@ -87,8 +87,6 @@ export default function Dashboard() {
     return <FamilySetup />;
   }
 
-  const [exitingProfile, setExitingProfile] = useState(false);
-  const [exitingGeofence, setExitingGeofence] = useState(false);
 
   const handleBackFromProfile = () => {
     setExitingProfile(true);
