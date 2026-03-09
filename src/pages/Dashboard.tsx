@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFamily } from '@/hooks/useFamily';
 import { useLocationTracking } from '@/hooks/useLocationTracking';
@@ -13,6 +13,7 @@ import ProfileSettings from '@/components/ProfileSettings';
 import GeofenceSettings from '@/components/GeofenceSettings';
 import FamilyChat from '@/components/FamilyChat';
 import FamilySetup from '@/pages/FamilySetup';
+import LiveLocationToggle from '@/components/LiveLocationToggle';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useLiveLocationSharing } from '@/hooks/useLiveLocationSharing';
 import NotificationPanel from '@/components/NotificationPanel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -48,6 +50,8 @@ export default function Dashboard() {
   usePushNotifications();
   useSOSAlerts();
   const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead, deleteNotification, clearAllRead } = useNotifications();
+  const { sessions, mySession, startSharing, stopSharing, isSharing } = useLiveLocationSharing(family?.id);
+  const liveSharingUserIds = useMemo(() => new Set(sessions.map((s) => s.user_id)), [sessions]);
 
   const handleRealtimeLocation = useCallback(
     (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
@@ -133,6 +137,7 @@ export default function Dashboard() {
           onSignOut={signOut}
           onOpenProfile={() => setShowProfile(true)}
           recentlyUpdated={recentlyUpdated}
+          liveSharingUserIds={liveSharingUserIds}
         />
       </div>
 
@@ -152,6 +157,7 @@ export default function Dashboard() {
               onSignOut={signOut}
               onOpenProfile={() => { setShowProfile(true); setMobileOpen(false); }}
               recentlyUpdated={recentlyUpdated}
+              liveSharingUserIds={liveSharingUserIds}
             />
           </SheetContent>
         </Sheet>
@@ -205,6 +211,18 @@ export default function Dashboard() {
           />
         )}
       </AnimatedPanel>
+
+      {/* Live location toggle */}
+      <div className="absolute bottom-6 left-4 z-[1000] md:left-[calc(18rem+1rem)]">
+        <div className="bg-card/90 backdrop-blur-sm rounded-xl shadow-lg p-2 border border-border/50">
+          <LiveLocationToggle
+            isSharing={isSharing}
+            expiresAt={mySession?.expires_at}
+            onStart={startSharing}
+            onStop={stopSharing}
+          />
+        </div>
+      </div>
 
       {/* Bottom buttons */}
       <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
