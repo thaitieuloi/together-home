@@ -86,11 +86,19 @@ export default function Dashboard() {
   }
 
   if (showProfile) {
-    return <ProfileSettings onBack={() => setShowProfile(false)} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />;
+    return (
+      <PageTransition>
+        <ProfileSettings onBack={() => setShowProfile(false)} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />
+      </PageTransition>
+    );
   }
 
   if (showGeofenceSettings) {
-    return <GeofenceSettings onBack={() => setShowGeofenceSettings(false)} />;
+    return (
+      <PageTransition>
+        <GeofenceSettings onBack={() => setShowGeofenceSettings(false)} />
+      </PageTransition>
+    );
   }
 
   return (
