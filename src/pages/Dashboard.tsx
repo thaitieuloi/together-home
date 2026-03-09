@@ -151,6 +151,7 @@ export default function Dashboard() {
               onMemberClick={handleMemberClick}
               onSignOut={signOut}
               onOpenProfile={() => { setShowProfile(true); setMobileOpen(false); }}
+              recentlyUpdated={recentlyUpdated}
             />
           </SheetContent>
         </Sheet>
