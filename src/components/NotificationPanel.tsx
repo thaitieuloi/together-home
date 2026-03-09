@@ -42,7 +42,7 @@ export default function NotificationPanel({
   ];
 
   return (
-    <div className="absolute top-16 right-4 z-[1001] w-[calc(100vw-2rem)] sm:w-80 glass glass-dark rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
+    <div className="absolute top-16 right-4 z-[1001] w-[calc(100vw-2rem)] sm:w-80 glass glass-dark rounded-2xl shadow-2xl overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border/50">
         <div className="flex items-center gap-2">

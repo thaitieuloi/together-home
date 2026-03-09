@@ -25,6 +25,7 @@ import NotificationPanel from '@/components/NotificationPanel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import PageTransition from '@/components/PageTransition';
+import AnimatedPanel from '@/components/AnimatedPanel';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
@@ -181,16 +182,18 @@ export default function Dashboard() {
       </div>
 
       {/* Notification panel */}
-      {showNotifications && (
-        <NotificationPanel
-          notifications={notifications}
-          onMarkAsRead={markAsRead}
-          onMarkAllAsRead={markAllAsRead}
-          onDelete={deleteNotification}
-          onClearAllRead={clearAllRead}
-          onClose={() => setShowNotifications(false)}
-        />
-      )}
+      <AnimatedPanel open={showNotifications} onClose={() => setShowNotifications(false)}>
+        {(handleClose) => (
+          <NotificationPanel
+            notifications={notifications}
+            onMarkAsRead={markAsRead}
+            onMarkAllAsRead={markAllAsRead}
+            onDelete={deleteNotification}
+            onClearAllRead={clearAllRead}
+            onClose={handleClose}
+          />
+        )}
+      </AnimatedPanel>
 
       {/* Bottom buttons */}
       <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
@@ -213,22 +216,26 @@ export default function Dashboard() {
       </div>
 
       {/* Chat */}
-      {showChat && (
-        <FamilyChat
-          familyId={family.id}
-          members={members}
-          onClose={() => setShowChat(false)}
-        />
-      )}
+      <AnimatedPanel open={showChat} onClose={() => setShowChat(false)}>
+        {(handleClose) => (
+          <FamilyChat
+            familyId={family.id}
+            members={members}
+            onClose={handleClose}
+          />
+        )}
+      </AnimatedPanel>
 
       {/* Geofence manager */}
-      {showGeofences && (
-        <GeofenceManager
-          onClose={() => setShowGeofences(false)}
-          pendingLocation={pendingGeofenceLocation}
-          onClearPending={() => setPendingGeofenceLocation(null)}
-        />
-      )}
+      <AnimatedPanel open={showGeofences} onClose={() => setShowGeofences(false)}>
+        {(handleClose) => (
+          <GeofenceManager
+            onClose={handleClose}
+            pendingLocation={pendingGeofenceLocation}
+            onClearPending={() => setPendingGeofenceLocation(null)}
+          />
+        )}
+      </AnimatedPanel>
 
       {/* Map */}
       <div className="flex-1 relative">
