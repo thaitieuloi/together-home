@@ -24,6 +24,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import NotificationPanel from '@/components/NotificationPanel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import PageTransition from '@/components/PageTransition';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
