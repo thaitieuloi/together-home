@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get last known geofence events for this user (to detect transitions)
+    // Get last known geofence events for this user
     const geofenceIds = geofences.map((g) => g.id);
     const { data: lastEvents } = await supabase
       .from("geofence_events")
@@ -77,7 +77,6 @@ Deno.serve(async (req) => {
       .in("geofence_id", geofenceIds)
       .order("created_at", { ascending: false });
 
-    // Build map of last event per geofence
     const lastEventMap = new Map<string, string>();
     if (lastEvents) {
       for (const ev of lastEvents) {
@@ -98,13 +97,9 @@ Deno.serve(async (req) => {
       let eventType: string | null = null;
 
       if (isInside && lastEvent !== "enter") {
-        // User just entered (or first time inside)
         eventType = "enter";
-      } else if (!isInside && (lastEvent === "enter" || lastEvent === undefined)) {
-        // User just exited (or first time outside with no prior event - skip first time outside)
-        if (lastEvent === "enter") {
-          eventType = "exit";
-        }
+      } else if (!isInside && lastEvent === "enter") {
+        eventType = "exit";
       }
 
       if (eventType) {
@@ -114,7 +109,6 @@ Deno.serve(async (req) => {
           event_type: eventType,
         });
 
-        // Record the event
         await supabase.from("geofence_events").insert({
           user_id,
           geofence_id: fence.id,
@@ -123,7 +117,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Send notifications to family members for any events
+    // Send notifications respecting per-user preferences
     if (events.length > 0) {
       const { data: profile } = await supabase
         .from("profiles")
@@ -139,6 +133,26 @@ Deno.serve(async (req) => {
 
       if (familyMembers && familyMembers.length > 0) {
         const userName = profile?.display_name || "Thành viên";
+        const memberIds = familyMembers.map((m) => m.user_id);
+
+        // Get notification preferences for all family members
+        const { data: prefs } = await supabase
+          .from("geofence_notification_prefs")
+          .select("user_id, geofence_id, notify_enter, notify_exit")
+          .in("user_id", memberIds)
+          .in("geofence_id", geofenceIds);
+
+        // Build prefs lookup: userId -> geofenceId -> {notify_enter, notify_exit}
+        const prefsMap = new Map<string, Map<string, { notify_enter: boolean; notify_exit: boolean }>>();
+        if (prefs) {
+          for (const p of prefs) {
+            if (!prefsMap.has(p.user_id)) prefsMap.set(p.user_id, new Map());
+            prefsMap.get(p.user_id)!.set(p.geofence_id, {
+              notify_enter: p.notify_enter,
+              notify_exit: p.notify_exit,
+            });
+          }
+        }
 
         const notifications = [];
         for (const ev of events) {
@@ -149,6 +163,14 @@ Deno.serve(async (req) => {
             : `${userName} đã rời khỏi ${ev.geofence_name}`;
 
           for (const member of familyMembers) {
+            // Check if this member has disabled notifications for this geofence/event
+            const memberPrefs = prefsMap.get(member.user_id)?.get(ev.geofence_id);
+            if (memberPrefs) {
+              if (isEnter && !memberPrefs.notify_enter) continue;
+              if (!isEnter && !memberPrefs.notify_exit) continue;
+            }
+            // Default: notify (no pref row = all enabled)
+
             notifications.push({
               user_id: member.user_id,
               title,
@@ -171,7 +193,7 @@ Deno.serve(async (req) => {
 
         console.log(
           `Geofence events: ${events.map((e) => `${e.event_type}:${e.geofence_name}`).join(", ")}. ` +
-          `Notified ${familyMembers.length} members.`
+          `Sent ${notifications.length} notifications.`
         );
       }
     }

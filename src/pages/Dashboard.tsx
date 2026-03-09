@@ -10,6 +10,7 @@ import FamilyMap from '@/components/FamilyMap';
 import LocationHistory from '@/components/LocationHistory';
 import GeofenceManager from '@/components/GeofenceManager';
 import ProfileSettings from '@/components/ProfileSettings';
+import GeofenceSettings from '@/components/GeofenceSettings';
 import FamilyChat from '@/components/FamilyChat';
 import FamilySetup from '@/pages/FamilySetup';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [showHistory, setShowHistory] = useState(false);
   const [showGeofences, setShowGeofences] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showGeofenceSettings, setShowGeofenceSettings] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
   const [pendingGeofenceLocation, setPendingGeofenceLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -84,7 +86,11 @@ export default function Dashboard() {
   }
 
   if (showProfile) {
-    return <ProfileSettings onBack={() => setShowProfile(false)} />;
+    return <ProfileSettings onBack={() => setShowProfile(false)} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />;
+  }
+
+  if (showGeofenceSettings) {
+    return <GeofenceSettings onBack={() => setShowGeofenceSettings(false)} />;
   }
 
   return (

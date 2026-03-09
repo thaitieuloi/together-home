@@ -6,15 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save, Loader2, User } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Bell } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect } from 'react';
 
 interface Props {
   onBack: () => void;
+  onOpenGeofenceSettings?: () => void;
 }
 
-export default function ProfileSettings({ onBack }: Props) {
+export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [displayName, setDisplayName] = useState('');
@@ -127,6 +128,19 @@ export default function ProfileSettings({ onBack }: Props) {
             </Button>
           </CardContent>
         </Card>
+
+        {onOpenGeofenceSettings && (
+          <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={onOpenGeofenceSettings}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <Bell className="w-5 h-5 text-primary" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">Thông báo vùng an toàn</p>
+                <p className="text-xs text-muted-foreground">Bật/tắt thông báo và xem lịch sử</p>
+              </div>
+              <ArrowLeft className="w-4 h-4 text-muted-foreground rotate-180" />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
