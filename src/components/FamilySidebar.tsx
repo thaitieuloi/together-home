@@ -103,6 +103,7 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
         </p>
         {members.map((m, i) => {
           const freshness = m.location ? getFreshnessInfo(m.location.timestamp) : null;
+          const isUpdated = recentlyUpdated.has(m.user_id);
           return (
             <button
               key={m.user_id}
@@ -110,7 +111,7 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
               className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/80 transition-all duration-200 text-left group"
             >
               <div className="relative">
-                <Avatar className={cn('w-10 h-10 transition-transform duration-200 group-hover:scale-105', freshness ? `ring-2 ${freshness.ring}` : '')}>
+                <Avatar className={cn('w-10 h-10 transition-transform duration-200 group-hover:scale-105', freshness ? `ring-2 ${freshness.ring}` : '', isUpdated && 'animate-bounce-subtle ring-2 ring-primary/50')}>
                   <AvatarFallback className={cn('text-sm font-medium text-white', colors[i % colors.length])}>
                     {getInitials(m.profile.display_name)}
                   </AvatarFallback>

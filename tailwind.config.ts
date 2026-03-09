@@ -95,7 +95,11 @@ export default {
         "slide-in-left": {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(0)" },
+        "bounce-subtle": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.15)" },
         },
+      },
         "slide-out-left": {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(-100%)" },
