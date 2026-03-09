@@ -21,8 +21,15 @@ export default function SOSButton() {
   const { toast } = useToast();
   const [sending, setSending] = useState(false);
 
+  const triggerHaptic = () => {
+    if (navigator.vibrate) {
+      navigator.vibrate([100, 50, 200]); // SOS pattern
+    }
+  };
+
   const sendSOS = async () => {
     if (!user) return;
+    triggerHaptic();
     setSending(true);
 
     try {
