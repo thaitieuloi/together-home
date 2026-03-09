@@ -42,34 +42,36 @@ export default function NotificationPanel({
   ];
 
   return (
-    <div className="absolute top-16 right-4 z-[1001] w-80 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
+    <div className="absolute top-16 right-4 z-[1001] w-[calc(100vw-2rem)] sm:w-80 glass glass-dark rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-border">
+      <div className="flex items-center justify-between p-4 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <Bell className="w-4 h-4 text-primary" />
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <Bell className="w-4 h-4 text-primary" />
+          </div>
           <h3 className="font-semibold text-sm text-foreground">Thông báo</h3>
           {unread.length > 0 && (
-            <span className="text-xs bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded-full">
+            <span className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded-full font-medium">
               {unread.length}
             </span>
           )}
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={onClose}>
           <X className="w-4 h-4" />
         </Button>
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 p-2 border-b border-border">
+      <div className="flex gap-1 p-2 border-b border-border/50">
         {filters.map((f) => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
             className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors',
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
               filter === f.key
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}
           >
             <f.icon className="w-3 h-3" />
@@ -79,67 +81,72 @@ export default function NotificationPanel({
       </div>
 
       {/* Actions bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30">
-        {unread.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={onMarkAllAsRead} className="h-6 text-[11px] px-2">
-            <CheckCheck className="w-3 h-3 mr-1" />
-            Đọc tất cả
-          </Button>
-        )}
-        {readCount > 0 && (
-          <Button variant="ghost" size="sm" onClick={onClearAllRead} className="h-6 text-[11px] px-2 text-destructive hover:text-destructive">
-            <Trash2 className="w-3 h-3 mr-1" />
-            Xóa đã đọc
-          </Button>
-        )}
-      </div>
+      {(unread.length > 0 || readCount > 0) && (
+        <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
+          {unread.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={onMarkAllAsRead} className="h-7 text-xs px-2 rounded-full">
+              <CheckCheck className="w-3 h-3 mr-1" />
+              Đọc tất cả
+            </Button>
+          )}
+          {readCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={onClearAllRead} className="h-7 text-xs px-2 text-destructive hover:text-destructive rounded-full ml-auto">
+              <Trash2 className="w-3 h-3 mr-1" />
+              Xóa đã đọc
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Notifications list */}
-      <ScrollArea className="max-h-72">
+      <ScrollArea className="max-h-[60vh] sm:max-h-72">
         {filtered.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground text-sm">
+          <div className="p-8 text-center text-muted-foreground text-sm">
+            <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
             {filter === 'all' ? 'Chưa có thông báo nào' : 'Không có thông báo loại này'}
           </div>
         ) : (
-          filtered.map((n) => (
+          filtered.map((n, i) => (
             <div
               key={n.id}
               className={cn(
-                'flex items-start gap-2 p-3 border-b border-border/50 hover:bg-accent/50 transition-colors group',
-                !n.read && 'bg-primary/5'
+                'flex items-start gap-3 p-3 border-b border-border/30 hover:bg-accent/50 transition-all duration-200 group',
+                !n.read && 'bg-primary/5',
               )}
+              style={{ animationDelay: `${i * 30}ms` }}
             >
+              <div className={cn(
+                'w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5',
+                n.type === 'sos' ? 'bg-destructive/10' : 'bg-primary/10'
+              )}>
+                {n.type === 'sos' 
+                  ? <AlertTriangle className="w-4 h-4 text-destructive" />
+                  : <Shield className="w-4 h-4 text-primary" />
+                }
+              </div>
               <button
                 className="flex-1 min-w-0 text-left"
                 onClick={() => !n.read && onMarkAsRead(n.id)}
               >
-                <p className={cn('text-sm', !n.read ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                <p className={cn('text-sm leading-tight', !n.read ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
                   {n.title}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-[10px] text-muted-foreground/70">
-                    {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: vi })}
-                  </p>
-                  <span className={cn(
-                    'text-[9px] px-1 py-0.5 rounded font-medium',
-                    n.type === 'geofence' ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'
-                  )}>
-                    {n.type === 'geofence' ? 'Vùng an toàn' : 'SOS'}
-                  </span>
-                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
+                <p className="text-[10px] text-muted-foreground/60 mt-1">
+                  {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: vi })}
+                </p>
               </button>
               <div className="flex items-center gap-1 shrink-0">
                 {!n.read && (
-                  <span className="w-2 h-2 rounded-full bg-primary mt-1.5" />
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse-gentle" />
                 )}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                  className="h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                   onClick={() => onDelete(n.id)}
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </div>

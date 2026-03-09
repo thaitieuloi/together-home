@@ -10,6 +10,7 @@ import { X, Send, Loader2, Image, MapPin } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface Message {
   id: string;
@@ -29,7 +30,7 @@ interface Props {
   onUnreadChange?: (count: number) => void;
 }
 
-const COLORS = ['bg-blue-500', 'bg-green-500', 'bg-orange-500', 'bg-purple-500', 'bg-pink-500', 'bg-teal-500'];
+const COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-orange-500', 'bg-violet-500', 'bg-pink-500', 'bg-teal-500'];
 
 export default function FamilyChat({ familyId, members, onClose, onUnreadChange }: Props) {
   const { user } = useAuth();
@@ -180,7 +181,7 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
         <img
           src={msg.image_url}
           alt="Chat image"
-          className="max-w-full rounded-lg max-h-48 object-cover cursor-pointer"
+          className="max-w-full rounded-xl max-h-48 object-cover cursor-pointer"
           onClick={() => window.open(msg.image_url!, '_blank')}
         />
       );
@@ -205,10 +206,10 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
   };
 
   return (
-    <div className="absolute bottom-20 left-4 md:left-auto md:right-20 z-[1000] w-80 h-[28rem] bg-card border border-border rounded-xl shadow-xl flex flex-col overflow-hidden">
-      <div className="p-3 border-b border-border flex items-center justify-between bg-primary/5">
+    <div className="absolute bottom-20 left-2 right-2 md:left-auto md:right-20 z-[1000] md:w-80 h-[70vh] md:h-[28rem] glass glass-dark rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
+      <div className="p-3 border-b border-border/50 flex items-center justify-between">
         <span className="font-semibold text-sm text-foreground">💬 Chat gia đình</span>
-        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose}>
+        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={onClose}>
           <X className="w-4 h-4" />
         </Button>
       </div>
@@ -230,30 +231,31 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
               const idx = getMemberIndex(msg.user_id);
 
               return (
-                <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+                <div key={msg.id} className={cn('flex gap-2', isMe ? 'flex-row-reverse' : '')}>
                   {!isMe && (
                     <Avatar className="w-7 h-7 shrink-0">
-                      <AvatarFallback className={`text-[10px] text-white ${COLORS[idx % COLORS.length]}`}>
+                      <AvatarFallback className={cn('text-[10px] text-white', COLORS[idx % COLORS.length])}>
                         {profile ? getInitials(profile.profile.display_name) : '?'}
                       </AvatarFallback>
                     </Avatar>
                   )}
-                  <div className={`max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div className={cn('max-w-[75%]', isMe ? 'items-end' : 'items-start')}>
                     {!isMe && (
                       <p className="text-[10px] text-muted-foreground mb-0.5 px-1">
                         {profile?.profile.display_name || 'Ẩn danh'}
                       </p>
                     )}
                     <div
-                      className={`px-3 py-1.5 rounded-2xl text-sm break-words ${
+                      className={cn(
+                        'px-3 py-2 rounded-2xl text-sm break-words transition-colors',
                         isMe
                           ? 'bg-primary text-primary-foreground rounded-br-md'
                           : 'bg-muted text-foreground rounded-bl-md'
-                      }`}
+                      )}
                     >
                       {renderMessageContent(msg)}
                     </div>
-                    <p className={`text-[10px] text-muted-foreground mt-0.5 px-1 ${isMe ? 'text-right' : ''}`}>
+                    <p className={cn('text-[10px] text-muted-foreground/60 mt-0.5 px-1', isMe ? 'text-right' : '')}>
                       {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true, locale: vi })}
                     </p>
                   </div>
@@ -265,7 +267,7 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
         )}
       </ScrollArea>
 
-      <div className="p-2 border-t border-border flex gap-1">
+      <div className="p-2 border-t border-border/50 flex gap-1.5">
         <input
           ref={fileInputRef}
           type="file"
@@ -276,7 +278,7 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
         <Button
           size="icon"
           variant="ghost"
-          className="h-9 w-9 shrink-0"
+          className="h-9 w-9 shrink-0 rounded-full"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
         >
@@ -285,7 +287,7 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
         <Button
           size="icon"
           variant="ghost"
-          className="h-9 w-9 shrink-0"
+          className="h-9 w-9 shrink-0 rounded-full"
           onClick={handleShareLocation}
           disabled={sending}
         >
@@ -296,12 +298,12 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Nhập tin nhắn..."
-          className="h-9 text-sm"
+          className="h-9 text-sm rounded-full"
           maxLength={2000}
         />
         <Button
           size="icon"
-          className="h-9 w-9 shrink-0"
+          className="h-9 w-9 shrink-0 rounded-full"
           onClick={handleSend}
           disabled={!newMessage.trim() || sending}
         >

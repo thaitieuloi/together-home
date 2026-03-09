@@ -16,14 +16,14 @@ import FamilySetup from '@/pages/FamilySetup';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-import { Menu, History, Shield, MessageCircle } from 'lucide-react';
+import { Menu, History, Shield, MessageCircle, Bell } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
 import { useNotifications } from '@/hooks/useNotifications';
 import NotificationPanel from '@/components/NotificationPanel';
 import { Badge } from '@/components/ui/badge';
-import { Bell } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
@@ -44,7 +44,6 @@ export default function Dashboard() {
   useSOSAlerts();
   const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead, deleteNotification, clearAllRead } = useNotifications();
 
-  // Realtime: direct payload update instead of full refetch
   const handleRealtimeLocation = useCallback(
     (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
       updateMemberLocation(userId, lat, lng, accuracy, updatedAt);
@@ -76,7 +75,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Đang tải...</div>
+        <div className="animate-pulse-gentle text-muted-foreground">Đang tải...</div>
       </div>
     );
   }
@@ -110,7 +109,7 @@ export default function Dashboard() {
       <div className="md:hidden absolute top-4 left-4 z-[1000]">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
-            <Button size="icon" variant="secondary" className="shadow-lg">
+            <Button size="icon" variant="secondary" className="shadow-lg rounded-full glass glass-dark">
               <Menu className="w-5 h-5" />
             </Button>
           </SheetTrigger>
@@ -132,13 +131,13 @@ export default function Dashboard() {
           <Button
             size="icon"
             variant={showNotifications ? 'default' : 'secondary'}
-            className="shadow-lg"
+            className={cn('shadow-lg rounded-full transition-all duration-200', !showNotifications && 'glass glass-dark')}
             onClick={() => setShowNotifications(!showNotifications)}
           >
             <Bell className="w-5 h-5" />
           </Button>
           {notifUnread > 0 && !showNotifications && (
-            <Badge className="absolute -top-1 -right-1 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-card rounded-full">
+            <Badge className="absolute -top-1.5 -right-1.5 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-background rounded-full animate-scale-in">
               {notifUnread > 99 ? '99+' : notifUnread}
             </Badge>
           )}
@@ -146,7 +145,7 @@ export default function Dashboard() {
         <Button
           size="icon"
           variant={showHistory ? 'default' : 'secondary'}
-          className="shadow-lg"
+          className={cn('shadow-lg rounded-full transition-all duration-200', !showHistory && 'glass glass-dark')}
           onClick={() => showHistory ? handleCloseHistory() : setShowHistory(true)}
         >
           <History className="w-5 h-5" />
@@ -154,7 +153,7 @@ export default function Dashboard() {
         <Button
           size="icon"
           variant={showGeofences ? 'default' : 'secondary'}
-          className="shadow-lg"
+          className={cn('shadow-lg rounded-full transition-all duration-200', !showGeofences && 'glass glass-dark')}
           onClick={() => setShowGeofences(!showGeofences)}
         >
           <Shield className="w-5 h-5" />
@@ -180,13 +179,13 @@ export default function Dashboard() {
           <Button
             size="icon"
             variant={showChat ? 'default' : 'secondary'}
-            className="shadow-lg w-12 h-12 rounded-full"
+            className={cn('shadow-lg w-12 h-12 rounded-full transition-all duration-200', !showChat && 'glass glass-dark')}
             onClick={() => setShowChat(!showChat)}
           >
             <MessageCircle className="w-5 h-5" />
           </Button>
           {unreadCount > 0 && !showChat && (
-            <Badge className="absolute -top-1 -right-1 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-card rounded-full">
+            <Badge className="absolute -top-1.5 -right-1.5 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-background rounded-full animate-scale-in">
               {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           )}
