@@ -167,6 +167,8 @@ export default function Dashboard() {
           notifications={notifications}
           onMarkAsRead={markAsRead}
           onMarkAllAsRead={markAllAsRead}
+          onDelete={deleteNotification}
+          onClearAllRead={clearAllRead}
           onClose={() => setShowNotifications(false)}
         />
       )}
