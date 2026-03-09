@@ -161,7 +161,10 @@ export default function Dashboard() {
             size="icon"
             variant={showNotifications ? 'default' : 'secondary'}
             className={cn('shadow-lg rounded-full transition-all duration-200', !showNotifications && 'glass glass-dark')}
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={() => {
+              if (notifMounted) { setNotifVisible(false); }
+              else { setNotifMounted(true); setNotifVisible(true); setShowNotifications(true); }
+            }}
           >
             <Bell className="w-5 h-5" />
           </Button>
