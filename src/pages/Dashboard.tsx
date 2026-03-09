@@ -212,6 +212,18 @@ export default function Dashboard() {
         )}
       </AnimatedPanel>
 
+      {/* Live location toggle */}
+      <div className="absolute bottom-6 left-4 z-[1000] md:left-[calc(18rem+1rem)]">
+        <div className="bg-card/90 backdrop-blur-sm rounded-xl shadow-lg p-2 border border-border/50">
+          <LiveLocationToggle
+            isSharing={isSharing}
+            expiresAt={mySession?.expires_at}
+            onStart={startSharing}
+            onStop={stopSharing}
+          />
+        </div>
+      </div>
+
       {/* Bottom buttons */}
       <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
         <SOSButton />
