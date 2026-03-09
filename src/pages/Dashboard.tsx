@@ -50,6 +50,8 @@ export default function Dashboard() {
   usePushNotifications();
   useSOSAlerts();
   const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead, deleteNotification, clearAllRead } = useNotifications();
+  const { sessions, mySession, startSharing, stopSharing, isSharing } = useLiveLocationSharing(family?.id);
+  const liveSharingUserIds = useMemo(() => new Set(sessions.map((s) => s.user_id)), [sessions]);
 
   const handleRealtimeLocation = useCallback(
     (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
