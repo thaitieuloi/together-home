@@ -157,6 +157,7 @@ export default function Dashboard() {
               onSignOut={signOut}
               onOpenProfile={() => { setShowProfile(true); setMobileOpen(false); }}
               recentlyUpdated={recentlyUpdated}
+              liveSharingUserIds={liveSharingUserIds}
             />
           </SheetContent>
         </Sheet>
