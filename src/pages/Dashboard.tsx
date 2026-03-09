@@ -19,7 +19,10 @@ import { Menu, History, Shield, MessageCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
+import { useNotifications } from '@/hooks/useNotifications';
+import NotificationPanel from '@/components/NotificationPanel';
 import { Badge } from '@/components/ui/badge';
+import { Bell } from 'lucide-react';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
@@ -32,10 +35,12 @@ export default function Dashboard() {
   const [showChat, setShowChat] = useState(false);
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
   const [pendingGeofenceLocation, setPendingGeofenceLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
+  const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead } = useNotifications();
 
   // Realtime: direct payload update instead of full refetch
   const handleRealtimeLocation = useCallback(
@@ -117,6 +122,21 @@ export default function Dashboard() {
 
       {/* Top-right controls */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
+        <div className="relative">
+          <Button
+            size="icon"
+            variant={showNotifications ? 'default' : 'secondary'}
+            className="shadow-lg"
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
+            <Bell className="w-5 h-5" />
+          </Button>
+          {notifUnread > 0 && !showNotifications && (
+            <Badge className="absolute -top-1 -right-1 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-card rounded-full">
+              {notifUnread > 99 ? '99+' : notifUnread}
+            </Badge>
+          )}
+        </div>
         <Button
           size="icon"
           variant={showHistory ? 'default' : 'secondary'}
@@ -134,6 +154,16 @@ export default function Dashboard() {
           <Shield className="w-5 h-5" />
         </Button>
       </div>
+
+      {/* Notification panel */}
+      {showNotifications && (
+        <NotificationPanel
+          notifications={notifications}
+          onMarkAsRead={markAsRead}
+          onMarkAllAsRead={markAllAsRead}
+          onClose={() => setShowNotifications(false)}
+        />
+      )}
 
       {/* Bottom buttons */}
       <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">

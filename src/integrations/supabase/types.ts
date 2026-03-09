@@ -73,6 +73,38 @@ export type Database = {
           },
         ]
       }
+      geofence_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          geofence_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          geofence_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          geofence_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geofence_events_geofence_id_fkey"
+            columns: ["geofence_id"]
+            isOneToOne: false
+            referencedRelation: "geofences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       geofences: {
         Row: {
           created_at: string
@@ -187,6 +219,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notifications: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          read?: boolean
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
