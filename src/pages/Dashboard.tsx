@@ -35,10 +35,12 @@ export default function Dashboard() {
   const [showChat, setShowChat] = useState(false);
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
   const [pendingGeofenceLocation, setPendingGeofenceLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
+  const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead } = useNotifications();
 
   // Realtime: direct payload update instead of full refetch
   const handleRealtimeLocation = useCallback(
