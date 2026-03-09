@@ -105,6 +105,41 @@ export type Database = {
           },
         ]
       }
+      geofence_notification_prefs: {
+        Row: {
+          created_at: string
+          geofence_id: string
+          id: string
+          notify_enter: boolean
+          notify_exit: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          geofence_id: string
+          id?: string
+          notify_enter?: boolean
+          notify_exit?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          geofence_id?: string
+          id?: string
+          notify_enter?: boolean
+          notify_exit?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geofence_notification_prefs_geofence_id_fkey"
+            columns: ["geofence_id"]
+            isOneToOne: false
+            referencedRelation: "geofences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       geofences: {
         Row: {
           created_at: string
