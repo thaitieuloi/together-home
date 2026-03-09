@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [showHistory, setShowHistory] = useState(false);
   const [showGeofences, setShowGeofences] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showGeofenceSettings, setShowGeofenceSettings] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
   const [pendingGeofenceLocation, setPendingGeofenceLocation] = useState<{ lat: number; lng: number } | null>(null);
