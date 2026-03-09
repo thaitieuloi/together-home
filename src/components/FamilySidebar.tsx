@@ -124,7 +124,13 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-foreground truncate">{m.profile.display_name}</p>
-                  {freshness && (
+                  {liveSharingUserIds.has(m.user_id) && (
+                    <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-primary/10 text-primary">
+                      <Radio className="w-2.5 h-2.5 animate-pulse" />
+                      Live
+                    </span>
+                  )}
+                  {freshness && !liveSharingUserIds.has(m.user_id) && (
                     <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', freshness.textClass)}>
                       {freshness.label}
                     </span>
