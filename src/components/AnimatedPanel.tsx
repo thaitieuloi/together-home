@@ -1,29 +1,48 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface Props {
-  show: boolean;
-  onExitComplete: () => void;
-  children: React.ReactNode;
+  open: boolean;
+  onClose: () => void;
+  children: (handleClose: () => void) => React.ReactNode;
   duration?: number;
 }
 
-export default function AnimatedPanel({ show, onExitComplete, children, duration = 200 }: Props) {
-  const [mounted, setMounted] = useState(true);
-  const [animClass, setAnimClass] = useState('animate-enter');
+/**
+ * Wraps a panel to add enter/exit animations.
+ * - When `open` becomes true, mounts children with animate-enter.
+ * - Call `handleClose` (passed to children) to trigger exit animation, then calls `onClose`.
+ */
+export default function AnimatedPanel({ open, onClose, children, duration = 200 }: Props) {
+  const [mounted, setMounted] = useState(false);
+  const [animating, setAnimating] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    if (!show) {
-      setAnimClass('animate-exit');
-      timerRef.current = setTimeout(() => {
-        setMounted(false);
-        onExitComplete();
-      }, duration);
+    if (open) {
+      setMounted(true);
+      setAnimating(false);
     }
+  }, [open]);
+
+  useEffect(() => {
     return () => clearTimeout(timerRef.current);
-  }, [show, duration, onExitComplete]);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    if (animating) return;
+    setAnimating(true);
+    timerRef.current = setTimeout(() => {
+      setMounted(false);
+      setAnimating(false);
+      onClose();
+    }, duration);
+  }, [animating, duration, onClose]);
 
   if (!mounted) return null;
 
-  return <div className={animClass}>{children}</div>;
+  return (
+    <div className={animating ? 'animate-exit' : 'animate-enter'}>
+      {children(handleClose)}
+    </div>
+  );
 }
