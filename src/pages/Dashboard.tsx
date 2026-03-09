@@ -43,14 +43,6 @@ export default function Dashboard() {
   const [exitingProfile, setExitingProfile] = useState(false);
   const [exitingGeofence, setExitingGeofence] = useState(false);
 
-  // Panel exit states
-  const [chatMounted, setChatMounted] = useState(false);
-  const [chatVisible, setChatVisible] = useState(true);
-  const [notifMounted, setNotifMounted] = useState(false);
-  const [notifVisible, setNotifVisible] = useState(true);
-  const [geoMounted, setGeoMounted] = useState(false);
-  const [geoVisible, setGeoVisible] = useState(true);
-
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
