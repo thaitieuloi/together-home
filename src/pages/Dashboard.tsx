@@ -52,6 +52,14 @@ export default function Dashboard() {
   const handleRealtimeLocation = useCallback(
     (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
       updateMemberLocation(userId, lat, lng, accuracy, updatedAt);
+      setRecentlyUpdated(prev => new Set(prev).add(userId));
+      setTimeout(() => {
+        setRecentlyUpdated(prev => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
+      }, 2000);
     },
     [updateMemberLocation]
   );
