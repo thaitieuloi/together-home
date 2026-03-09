@@ -10,6 +10,7 @@ import FamilyMap from '@/components/FamilyMap';
 import LocationHistory from '@/components/LocationHistory';
 import GeofenceManager from '@/components/GeofenceManager';
 import ProfileSettings from '@/components/ProfileSettings';
+import GeofenceSettings from '@/components/GeofenceSettings';
 import FamilyChat from '@/components/FamilyChat';
 import FamilySetup from '@/pages/FamilySetup';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
