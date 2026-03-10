@@ -53,13 +53,15 @@ interface Props {
   onMapClick?: (lat: number, lng: number) => void;
   showGeofences?: boolean;
   familyId?: string;
+  liveSharingUserIds?: Set<string>;
 }
 
-export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, showGeofences, familyId }: Props) {
+export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, showGeofences, familyId, liveSharingUserIds = new Set() }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const accuracyCirclesRef = useRef<Map<string, L.Circle>>(new Map());
+  const liveCirclesRef = useRef<Map<string, L.Circle>>(new Map());
   const historyLayerRef = useRef<L.LayerGroup | null>(null);
   const geofenceLayerRef = useRef<L.LayerGroup | null>(null);
   const markerLayerRef = useRef<L.LayerGroup | null>(null);
@@ -90,6 +92,21 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
     historyLayerRef.current = L.layerGroup().addTo(map);
     geofenceLayerRef.current = L.layerGroup().addTo(map);
 
+    // Inject pulse animation CSS
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes live-pulse {
+        0% { opacity: 0.6; transform: scale(1); }
+        50% { opacity: 0.2; transform: scale(1.3); }
+        100% { opacity: 0.6; transform: scale(1); }
+      }
+      .live-pulse-circle {
+        animation: live-pulse 2s ease-in-out infinite;
+        transform-origin: center;
+      }
+    `;
+    document.head.appendChild(style);
+
     return () => {
       map.remove();
       mapRef.current = null;
@@ -98,6 +115,8 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
       geofenceLayerRef.current = null;
       markersRef.current.clear();
       accuracyCirclesRef.current.clear();
+      liveCirclesRef.current.clear();
+      style.remove();
     };
   }, []);
 
@@ -152,7 +171,7 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
     loadGeofences();
   }, [showGeofences, familyId]);
 
-  // Update markers with smooth transitions
+  // Update markers with smooth transitions + live pulse circles
   useEffect(() => {
     if (!mapRef.current || !markerLayerRef.current) return;
 
@@ -169,6 +188,10 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
         const circle = accuracyCirclesRef.current.get(id);
         if (circle) markerLayerRef.current.removeLayer(circle);
         accuracyCirclesRef.current.delete(id);
+
+        const liveCircle = liveCirclesRef.current.get(id);
+        if (liveCircle) markerLayerRef.current.removeLayer(liveCircle);
+        liveCirclesRef.current.delete(id);
       }
     }
 
@@ -183,10 +206,12 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
         COLORS[i % COLORS.length],
         freshness.dot
       );
+      const isLive = liveSharingUserIds.has(m.user_id);
 
       const popupContent = `
         <div style="text-align:center; min-width:120px;">
           <p style="margin:0; font-weight:600; font-size:14px;">${m.profile.display_name}</p>
+          ${isLive ? '<p style="margin:2px 0; font-size:11px; color:#3b82f6; font-weight:600;">📡 Đang chia sẻ Live</p>' : ''}
           <p style="margin:4px 0 0; font-size:12px; color:${freshness.dot}; font-weight:500;">
             ● ${freshness.label}
           </p>
@@ -199,7 +224,6 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
 
       const existingMarker = markersRef.current.get(m.user_id);
       if (existingMarker) {
-        // Smooth transition: update position
         existingMarker.setLatLng(latlng);
         existingMarker.setIcon(icon);
         existingMarker.setPopupContent(popupContent);
@@ -247,6 +271,29 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
           accuracyCirclesRef.current.set(m.user_id, circle);
         }
       }
+
+      // Live pulse circle
+      const existingLive = liveCirclesRef.current.get(m.user_id);
+      if (isLive) {
+        if (existingLive) {
+          existingLive.setLatLng(latlng);
+        } else {
+          const liveCircle = L.circle(latlng, {
+            radius: 60,
+            color: COLORS[i % COLORS.length],
+            fillColor: COLORS[i % COLORS.length],
+            fillOpacity: 0.15,
+            weight: 2,
+            opacity: 0.5,
+            className: 'live-pulse-circle',
+          });
+          markerLayerRef.current!.addLayer(liveCircle);
+          liveCirclesRef.current.set(m.user_id, liveCircle);
+        }
+      } else if (existingLive) {
+        markerLayerRef.current!.removeLayer(existingLive);
+        liveCirclesRef.current.delete(m.user_id);
+      }
     });
 
     // Auto-fit bounds only on first load
@@ -261,7 +308,7 @@ export default function FamilyMap({ members, flyTo, historyTrail, onMapClick, sh
         mapRef.current.setView([loc.latitude, loc.longitude], 15);
       }
     }
-  }, [membersWithLocation]);
+  }, [membersWithLocation, liveSharingUserIds]);
 
   // Fly to member
   useEffect(() => {

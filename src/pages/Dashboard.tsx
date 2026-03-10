@@ -28,10 +28,13 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import PageTransition from '@/components/PageTransition';
 import AnimatedPanel from '@/components/AnimatedPanel';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
   const { signOut } = useAuth();
   const { family, members, loading, refetch, updateMemberLocation } = useFamily();
+  const { toast } = useToast();
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -78,6 +81,30 @@ export default function Dashboard() {
     setMobileOpen(false);
   };
 
+  const handleShowTrip = useCallback(async (member: FamilyMemberWithProfile) => {
+    // Load last 3 hours of location history for this member
+    const since = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from('user_locations')
+      .select('*')
+      .eq('user_id', member.user_id)
+      .gte('timestamp', since)
+      .order('timestamp', { ascending: false })
+      .limit(500);
+
+    if (data && data.length > 0) {
+      setHistoryTrail(data);
+      // Fly to latest position
+      if (member.location) {
+        setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
+      }
+      toast({ title: `Lịch sử di chuyển của ${member.profile.display_name}`, description: `${data.length} điểm trong 3 giờ qua` });
+    } else {
+      toast({ title: 'Không có dữ liệu', description: 'Chưa có lịch sử di chuyển gần đây', variant: 'destructive' });
+    }
+    setMobileOpen(false);
+  }, [toast]);
+
   const handleCloseHistory = () => {
     setShowHistory(false);
     setHistoryTrail([]);
@@ -100,7 +127,6 @@ export default function Dashboard() {
   if (!family) {
     return <FamilySetup />;
   }
-
 
   const handleBackFromProfile = () => {
     setExitingProfile(true);
@@ -136,8 +162,10 @@ export default function Dashboard() {
           onMemberClick={handleMemberClick}
           onSignOut={signOut}
           onOpenProfile={() => setShowProfile(true)}
+          onShowTrip={handleShowTrip}
           recentlyUpdated={recentlyUpdated}
           liveSharingUserIds={liveSharingUserIds}
+          onMemberRemoved={refetch}
         />
       </div>
 
@@ -156,8 +184,10 @@ export default function Dashboard() {
               onMemberClick={handleMemberClick}
               onSignOut={signOut}
               onOpenProfile={() => { setShowProfile(true); setMobileOpen(false); }}
+              onShowTrip={handleShowTrip}
               recentlyUpdated={recentlyUpdated}
               liveSharingUserIds={liveSharingUserIds}
+              onMemberRemoved={refetch}
             />
           </SheetContent>
         </Sheet>
@@ -275,6 +305,7 @@ export default function Dashboard() {
           onMapClick={handleMapClick}
           showGeofences={showGeofences}
           familyId={family.id}
+          liveSharingUserIds={liveSharingUserIds}
         />
 
         {showHistory && (
