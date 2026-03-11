@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.917749904eed4eedb3413cc928986c36',
+  appId: 'app.lovable.familytracker',
   appName: 'Family Tracker',
   webDir: 'dist',
   server: {
