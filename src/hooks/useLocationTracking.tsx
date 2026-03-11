@@ -2,7 +2,23 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { Capacitor } from '@capacitor/core';
-import { Geolocation } from '@capacitor/geolocation';
+import { registerPlugin } from '@capacitor/core';
+
+interface BackgroundGeolocationPlugin {
+  addWatcher(
+    options: {
+      backgroundMessage?: string;
+      backgroundTitle?: string;
+      requestPermissions?: boolean;
+      stale?: boolean;
+      distanceFilter?: number;
+    },
+    callback: (position: { latitude: number; longitude: number; accuracy: number; speed: number | null } | undefined, error: any) => void
+  ): Promise<string>;
+  removeWatcher(options: { id: string }): Promise<void>;
+}
+
+const BackgroundGeolocation = registerPlugin<BackgroundGeolocationPlugin>('BackgroundGeolocation');
 
 const MAX_ACCURACY_METERS = 100;
 const MIN_DISTANCE_METERS = 10;
@@ -23,7 +39,7 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
 export function useLocationTracking() {
   const { user } = useAuth();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const watchIdRef = useRef<string | number | null>(null);
+  const watcherIdRef = useRef<string | null>(null);
   const lastLocationRef = useRef<{ lat: number; lng: number; time: number } | null>(null);
   const isMovingRef = useRef(false);
   const pendingQueueRef = useRef<Array<{ lat: number; lng: number; accuracy: number | null; speed: number | null }>>([]);
@@ -41,7 +57,6 @@ export function useLocationTracking() {
     const isNative = Capacitor.isNativePlatform();
 
     const sendLocation = async (lat: number, lng: number, accuracy: number | null, speed: number | null) => {
-      // Accuracy filter - discard very inaccurate readings, but always allow first location
       if (accuracy !== null && accuracy > MAX_ACCURACY_METERS && lastLocationRef.current !== null) {
         console.log(`[LocationTracking] Skipped: accuracy ${accuracy}m > ${MAX_ACCURACY_METERS}m`);
         return;
@@ -50,27 +65,22 @@ export function useLocationTracking() {
       const now = Date.now();
       let calculatedSpeed = speed;
 
-      // Calculate speed and distance from last known position
       if (lastLocationRef.current) {
         const dist = haversine(lastLocationRef.current.lat, lastLocationRef.current.lng, lat, lng);
         const timeDiffSec = (now - lastLocationRef.current.time) / 1000;
 
-        // Skip if hasn't moved significantly
         if (dist < MIN_DISTANCE_METERS) return;
 
-        // Calculate speed in km/h if not provided
         if (calculatedSpeed === null && timeDiffSec > 0) {
           calculatedSpeed = (dist / timeDiffSec) * 3.6;
         }
       }
 
-      // Determine if moving
       const speedKmh = calculatedSpeed ?? 0;
       isMovingRef.current = speedKmh > SPEED_THRESHOLD_KMH;
 
       lastLocationRef.current = { lat, lng, time: now };
 
-      // Batch write: upsert latest_locations + insert user_locations + check geofence
       try {
         await Promise.all([
           supabase.from('latest_locations').upsert({
@@ -93,7 +103,6 @@ export function useLocationTracking() {
           }),
         ]);
 
-        // Flush any pending queued locations
         if (pendingQueueRef.current.length > 0) {
           const queue = [...pendingQueueRef.current];
           pendingQueueRef.current = [];
@@ -107,33 +116,47 @@ export function useLocationTracking() {
           }
         }
       } catch {
-        // Queue for retry on failure (offline)
         pendingQueueRef.current.push({ lat, lng, accuracy, speed: calculatedSpeed });
       }
     };
 
     const startTracking = async () => {
       if (isNative) {
-        const perm = await Geolocation.requestPermissions();
-        if (perm.location !== 'granted') {
-          console.warn('Location permission denied');
-          return;
+        // Use background geolocation plugin - runs as Android foreground service
+        // This keeps tracking even when app is minimized or screen is off
+        try {
+          const id = await BackgroundGeolocation.addWatcher(
+            {
+              backgroundMessage: 'Đang theo dõi vị trí để gia đình bạn luôn biết bạn ở đâu.',
+              backgroundTitle: 'Family Tracker đang chạy',
+              requestPermissions: true,
+              stale: false,
+              distanceFilter: MIN_DISTANCE_METERS,
+            },
+            (position, error) => {
+              if (error) {
+                if (error.code === 'NOT_AUTHORIZED') {
+                  console.warn('[LocationTracking] Background location not authorized');
+                  // Could prompt user to open settings
+                }
+                return;
+              }
+              if (!position) return;
+              sendLocation(
+                position.latitude,
+                position.longitude,
+                position.accuracy,
+                position.speed
+              );
+            }
+          );
+          watcherIdRef.current = id;
+          console.log('[LocationTracking] Background watcher started:', id);
+        } catch (err) {
+          console.error('[LocationTracking] Failed to start background geolocation:', err);
         }
-
-        const id = await Geolocation.watchPosition(
-          { enableHighAccuracy: true },
-          (position, err) => {
-            if (err || !position) return;
-            sendLocation(
-              position.coords.latitude,
-              position.coords.longitude,
-              position.coords.accuracy,
-              position.coords.speed
-            );
-          }
-        );
-        watchIdRef.current = id;
       } else {
+        // Web fallback - polling with adaptive intervals
         if (!navigator.geolocation) return;
 
         const sendCurrentLocation = () => {
@@ -149,7 +172,6 @@ export function useLocationTracking() {
           );
         };
 
-        // Adaptive interval based on movement and visibility
         const scheduleNext = () => {
           if (intervalRef.current) clearTimeout(intervalRef.current);
           intervalRef.current = setTimeout(() => {
@@ -161,9 +183,8 @@ export function useLocationTracking() {
         sendCurrentLocation();
         scheduleNext();
 
-        // Listen for visibility changes to adjust interval
         const handleVisibility = () => {
-          scheduleNext(); // Reschedule with new interval
+          scheduleNext();
         };
         document.addEventListener('visibilitychange', handleVisibility);
 
@@ -177,8 +198,9 @@ export function useLocationTracking() {
 
     return () => {
       cleanupPromise?.then((cleanup) => cleanup?.());
-      if (isNative && watchIdRef.current !== null) {
-        Geolocation.clearWatch({ id: watchIdRef.current as string });
+      if (isNative && watcherIdRef.current !== null) {
+        BackgroundGeolocation.removeWatcher({ id: watcherIdRef.current });
+        watcherIdRef.current = null;
       }
       if (intervalRef.current) {
         clearTimeout(intervalRef.current);
