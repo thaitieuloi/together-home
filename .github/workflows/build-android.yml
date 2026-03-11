@@ -1,4 +1,4 @@
-name: Android Build
+name: Android CI Build
 
 on:
   workflow_dispatch:
@@ -10,76 +10,76 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      JAVA_VERSION: 21
       NODE_VERSION: 22
+      JAVA_VERSION: 21
 
     steps:
 
-      # 1 Checkout
-      - name: Checkout
+      # 1️⃣ Checkout source
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      # 2 Setup Node
+      # 2️⃣ Setup Node
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      # 3 Install deps
-      - name: Install Dependencies
+      # 3️⃣ Install dependencies
+      - name: Install dependencies
         run: npm ci
 
-      # 4 Build web
-      - name: Build Web
+      # 4️⃣ Build web (Vite)
+      - name: Build Web App
         run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
-      # 5 Setup Java
+      # 5️⃣ Setup Java
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
 
-      # 6 Cache Gradle
+      # 6️⃣ Setup Gradle cache
       - name: Setup Gradle Cache
         uses: gradle/actions/setup-gradle@v3
 
-      # 7 Setup Android SDK
+      # 7️⃣ Setup Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 8 Capacitor sync
+      # 8️⃣ Sync Capacitor
       - name: Sync Capacitor
         run: npx cap sync android
 
-      # 9 Grant permission
-      - name: Grant gradlew permission
+      # 9️⃣ Grant permission gradlew
+      - name: Grant execute permission
         run: chmod +x android/gradlew
 
-      # 10 Build Debug APK
+      # 🔟 Build Debug APK
       - name: Build Debug APK
         working-directory: android
         run: ./gradlew assembleDebug --parallel --build-cache
 
-      # 11 Build Release AAB
+      # 1️⃣1️⃣ Build Release AAB
       - name: Build Release Bundle
         working-directory: android
         run: ./gradlew bundleRelease --parallel --build-cache
 
-      # 12 Upload APK
-      - name: Upload APK
+      # 1️⃣2️⃣ Upload APK
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
+          name: android-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
-      # 13 Upload AAB
-      - name: Upload AAB
+      # 1️⃣3️⃣ Upload AAB
+      - name: Upload Release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: android-aab
+          name: android-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
