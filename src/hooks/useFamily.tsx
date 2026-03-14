@@ -12,6 +12,9 @@ export interface FamilyMemberWithProfile {
     longitude: number;
     accuracy: number | null;
     timestamp: string;
+    speed: number | null;
+    is_moving: boolean | null;
+    battery_level: number | null;
   } | null;
 }
 
@@ -87,6 +90,9 @@ export function useFamily() {
               longitude: loc.longitude,
               accuracy: loc.accuracy,
               timestamp: loc.updated_at,
+              speed: loc.speed ?? null,
+              is_moving: loc.is_moving ?? null,
+              battery_level: loc.battery_level ?? null,
             }
           : null,
       });
@@ -97,13 +103,30 @@ export function useFamily() {
   }, [user]);
 
   const updateMemberLocation = useCallback(
-    (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
+    (
+      userId: string,
+      lat: number,
+      lng: number,
+      accuracy: number | null,
+      updatedAt: string,
+      speed?: number | null,
+      isMoving?: boolean | null,
+      batteryLevel?: number | null
+    ) => {
       setMembers((prev) =>
         prev.map((m) =>
           m.user_id === userId
             ? {
                 ...m,
-                location: { latitude: lat, longitude: lng, accuracy, timestamp: updatedAt },
+                location: {
+                  latitude: lat,
+                  longitude: lng,
+                  accuracy,
+                  timestamp: updatedAt,
+                  speed: speed ?? null,
+                  is_moving: isMoving ?? null,
+                  battery_level: batteryLevel ?? null,
+                },
               }
             : m
         )

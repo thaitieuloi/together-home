@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
+import { Device } from '@capacitor/device';
 
 interface BackgroundGeolocationPlugin {
   addWatcher(
@@ -54,6 +55,26 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   const dLon = toRad(lon2 - lon1);
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Returns device battery level as 0–100 integer, or null if unavailable.
+ * Uses @capacitor/device on native platforms, Web Battery API as fallback.
+ */
+async function getBatteryLevel(): Promise<number | null> {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const info = await Device.getBatteryInfo();
+      return typeof info.batteryLevel === 'number' ? Math.round(info.batteryLevel * 100) : null;
+    }
+    if ('getBattery' in navigator) {
+      const battery = await (navigator as any).getBattery();
+      return typeof battery.level === 'number' ? Math.round(battery.level * 100) : null;
+    }
+  } catch {
+    // Battery info is non-critical; silently ignore errors
+  }
+  return null;
 }
 
 /**
@@ -168,6 +189,8 @@ export function useLocationTracking() {
       lastLocationRef.current = { lat, lng, time: now };
 
       try {
+        const batteryLevel = await getBatteryLevel();
+
         const [latestRes, historyRes, geofenceRes] = await Promise.all([
           supabase.from('latest_locations').upsert(
             {
@@ -177,6 +200,7 @@ export function useLocationTracking() {
               accuracy,
               speed: calculatedSpeed,
               is_moving: isMovingRef.current,
+              battery_level: batteryLevel,
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'user_id' }

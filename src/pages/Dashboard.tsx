@@ -94,8 +94,17 @@ export default function Dashboard() {
   const liveSharingUserIds = useMemo(() => new Set(sessions.map((s) => s.user_id)), [sessions]);
 
   const handleRealtimeLocation = useCallback(
-    (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
-      updateMemberLocation(userId, lat, lng, accuracy, updatedAt);
+    (
+      userId: string,
+      lat: number,
+      lng: number,
+      accuracy: number | null,
+      updatedAt: string,
+      speed?: number | null,
+      isMoving?: boolean | null,
+      batteryLevel?: number | null
+    ) => {
+      updateMemberLocation(userId, lat, lng, accuracy, updatedAt, speed, isMoving, batteryLevel);
       setRecentlyUpdated((prev) => new Set(prev).add(userId));
       setTimeout(() => {
         setRecentlyUpdated((prev) => {
