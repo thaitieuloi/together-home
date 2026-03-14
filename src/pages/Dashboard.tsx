@@ -13,6 +13,7 @@ import GeofenceManager from '@/components/GeofenceManager';
 import ProfileSettings from '@/components/ProfileSettings';
 import GeofenceSettings from '@/components/GeofenceSettings';
 import FamilyChat from '@/components/FamilyChat';
+import MemberActionSheet from '@/components/MemberActionSheet';
 import FamilySetup from '@/pages/FamilySetup';
 import LiveLocationToggle from '@/components/LiveLocationToggle';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
@@ -77,6 +78,8 @@ export default function Dashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [exitingProfile, setExitingProfile] = useState(false);
   const [exitingGeofence, setExitingGeofence] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<FamilyMemberWithProfile | null>(null);
+  const [showMemberSheet, setShowMemberSheet] = useState(false);
 
   useLocationTracking();
   usePushNotifications();
@@ -121,10 +124,28 @@ export default function Dashboard() {
   const { unreadCount } = useUnreadMessages(family?.id, showChat);
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
+    setSelectedMember(member);
+    setShowMemberSheet(true);
+    setMobileOpen(false);
+  };
+
+  const handleFlyToMember = (member: FamilyMemberWithProfile) => {
+    if (!member.location) return;
+    setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
+    setShowMemberSheet(false);
+  };
+
+  const handleMessageMember = (_member: FamilyMemberWithProfile) => {
+    setShowChat(true);
+    setShowMemberSheet(false);
+  };
+
+  const handleShowMemberHistory = (member: FamilyMemberWithProfile) => {
+    setShowHistory(true);
+    setShowMemberSheet(false);
     if (member.location) {
       setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
     }
-    setMobileOpen(false);
   };
 
   const handleShowTrip = useCallback(
@@ -421,6 +442,16 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Member Action Sheet */}
+      <MemberActionSheet
+        member={selectedMember}
+        open={showMemberSheet}
+        onClose={() => setShowMemberSheet(false)}
+        onNavigate={handleFlyToMember}
+        onMessage={handleMessageMember}
+        onViewHistory={handleShowMemberHistory}
+      />
+
       {/* Chat */}
       <AnimatedPanel open={showChat} onClose={() => setShowChat(false)}>
         {(handleClose) => <FamilyChat familyId={family.id} members={members} onClose={handleClose} />}
@@ -444,13 +475,18 @@ export default function Dashboard() {
           flyTo={flyTo}
           historyTrail={historyTrail}
           onMapClick={handleMapClick}
+          onMemberClick={handleMemberClick}
           showGeofences={showGeofences}
           familyId={family.id}
           liveSharingUserIds={liveSharingUserIds}
         />
 
         {showHistory && (
-          <LocationHistory members={members} onHistoryLoaded={setHistoryTrail} onClose={handleCloseHistory} />
+          <LocationHistory
+            members={members}
+            onHistoryLoaded={(trail, _mode) => setHistoryTrail(trail)}
+            onClose={handleCloseHistory}
+          />
         )}
       </div>
     </div>
