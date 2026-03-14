@@ -55,29 +55,49 @@ function getFreshnessColor(timestamp: string, language: 'vi' | 'en'): { dot: str
   return { dot: '#ef4444', label: text.offline };
 }
 
-function createCustomIcon(initials: string, color: string, freshnessColor: string) {
+function createCustomIcon(
+  initials: string,
+  color: string,
+  freshnessColor: string,
+  displayName: string,
+  speedKmh: number | null,
+  isMoving: boolean | null
+) {
+  const shortName = displayName.split(' ').pop() ?? displayName;
+  const speedBadge =
+    isMoving && speedKmh && speedKmh > 3
+      ? `<span style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;font-size:9px;font-weight:700;padding:1px 6px;border-radius:999px;white-space:nowrap;border:1.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${Math.round(speedKmh)} km/h</span>`
+      : '';
   return L.divIcon({
     className: 'custom-marker',
     html: `
-      <div style="position:relative; width:40px; height:40px;">
+      <div style="position:relative;width:44px;display:flex;flex-direction:column;align-items:center;">
+        ${speedBadge}
         <div style="
-          width: 40px; height: 40px; border-radius: 50%;
-          background: ${color}; border: 3px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          display: flex; align-items: center; justify-content: center;
-          color: white; font-weight: 600; font-size: 14px;
-          font-family: system-ui, sans-serif;
-        ">${initials}</div>
+          width:40px;height:40px;border-radius:50%;
+          background:${color};border:3px solid white;
+          box-shadow:0 2px 8px rgba(0,0,0,0.3);
+          display:flex;align-items:center;justify-content:center;
+          color:white;font-weight:600;font-size:14px;
+          font-family:system-ui,sans-serif;position:relative;
+        ">${initials}
+          <span style="position:absolute;bottom:-2px;right:-2px;width:12px;height:12px;border-radius:50%;background:${freshnessColor};border:2px solid white;"></span>
+        </div>
         <span style="
-          position:absolute; bottom:-2px; right:-2px;
-          width:12px; height:12px; border-radius:50%;
-          background:${freshnessColor}; border:2px solid white;
-        "></span>
+          margin-top:3px;
+          background:rgba(255,255,255,0.95);color:#111827;
+          font-size:10px;font-weight:600;
+          padding:1px 7px;border-radius:999px;
+          white-space:nowrap;max-width:80px;
+          overflow:hidden;text-overflow:ellipsis;
+          box-shadow:0 1px 4px rgba(0,0,0,0.18);
+          border:1px solid rgba(0,0,0,0.08);
+        ">${shortName}</span>
       </div>
     `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -24],
+    iconSize: [44, 64],
+    iconAnchor: [22, 20],
+    popupAnchor: [0, -48],
   });
 }
 
@@ -314,11 +334,24 @@ export default function FamilyMap({
       const loc = m.location!;
       const latlng: [number, number] = [loc.latitude, loc.longitude];
       const freshness = getFreshnessColor(loc.timestamp, language);
-      const icon = createCustomIcon(getInitials(m.profile.display_name), COLORS[i % COLORS.length], freshness.dot);
+      const icon = createCustomIcon(
+        getInitials(m.profile.display_name),
+        COLORS[i % COLORS.length],
+        freshness.dot,
+        m.profile.display_name,
+        loc.speed ?? null,
+        loc.is_moving ?? null
+      );
       const isLive = liveSharingUserIds.has(m.user_id);
 
+      const speedText = loc.is_moving && loc.speed && loc.speed > 3
+        ? `<p style="margin:2px 0 0;font-size:11px;color:#2563eb;font-weight:600;">🚗 ${Math.round(loc.speed)} km/h</p>`
+        : '';
+      const batteryText = loc.battery_level !== null && loc.battery_level !== undefined
+        ? `<p style="margin:2px 0 0;font-size:11px;color:${loc.battery_level < 20 ? '#ef4444' : loc.battery_level < 50 ? '#f59e0b' : '#22c55e'};">🔋 ${loc.battery_level}%</p>`
+        : '';
       const popupContent = `
-        <div style="text-align:center; min-width:120px;">
+        <div style="text-align:center; min-width:130px;">
           <p style="margin:0; font-weight:600; font-size:14px;">${m.profile.display_name}</p>
           ${isLive ? `<p style="margin:2px 0; font-size:11px; color:#3b82f6; font-weight:600;">${mapText.live}</p>` : ''}
           <p style="margin:4px 0 0; font-size:12px; color:${freshness.dot}; font-weight:500;">
@@ -327,6 +360,8 @@ export default function FamilyMap({
           <p style="margin:2px 0 0; font-size:12px; color:#6b7280;">
             ${formatDistanceToNow(new Date(loc.timestamp), { addSuffix: true, locale: dateLocale })}
           </p>
+          ${speedText}
+          ${batteryText}
           ${loc.accuracy ? `<p style="margin:2px 0 0; font-size:11px; color:#9ca3af;">±${Math.round(loc.accuracy)}m</p>` : ''}
         </div>
       `;

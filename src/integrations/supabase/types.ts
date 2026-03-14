@@ -184,6 +184,7 @@ export type Database = {
       latest_locations: {
         Row: {
           accuracy: number | null
+          battery_level: number | null
           heading: number | null
           is_moving: boolean | null
           latitude: number
@@ -194,6 +195,7 @@ export type Database = {
         }
         Insert: {
           accuracy?: number | null
+          battery_level?: number | null
           heading?: number | null
           is_moving?: boolean | null
           latitude: number
@@ -204,6 +206,7 @@ export type Database = {
         }
         Update: {
           accuracy?: number | null
+          battery_level?: number | null
           heading?: number | null
           is_moving?: boolean | null
           latitude?: number

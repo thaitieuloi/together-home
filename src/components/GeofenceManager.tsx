@@ -161,9 +161,25 @@ export default function GeofenceManager({ onClose, pendingLocation, onClearPendi
                 <Input type="number" step="any" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="106.6297" />
               </div>
             </div>
-            <div>
-              <Label>Bán kính (mét)</Label>
-              <Input type="number" value={radius} onChange={(e) => setRadius(e.target.value)} placeholder="500" />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Bán kính</Label>
+                <span className="text-sm font-semibold text-primary">{radius} m</span>
+              </div>
+              <input
+                type="range"
+                min="50"
+                max="5000"
+                step="50"
+                value={radius}
+                onChange={(e) => setRadius(e.target.value)}
+                className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-primary bg-muted"
+              />
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>50 m</span>
+                <span>2.5 km</span>
+                <span>5 km</span>
+              </div>
             </div>
           </div>
           <DialogFooter>

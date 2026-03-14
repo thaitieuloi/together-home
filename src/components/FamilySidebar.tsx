@@ -16,6 +16,11 @@ import {
   Radio,
   Trash2,
   Route,
+  Battery,
+  BatteryLow,
+  BatteryWarning,
+  BatteryCharging,
+  Gauge,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
@@ -112,6 +117,13 @@ function getFreshnessInfo(timestamp: string, language: 'vi' | 'en') {
     ring: 'ring-red-500/30',
     textClass: 'bg-red-500/10 text-red-600 dark:text-red-400',
   };
+}
+
+function getBatteryInfo(level: number | null) {
+  if (level === null || level === undefined) return null;
+  if (level < 20) return { color: 'text-red-500', bg: 'bg-red-500/10', Icon: BatteryLow, pulse: true };
+  if (level < 50) return { color: 'text-amber-500', bg: 'bg-amber-500/10', Icon: BatteryWarning, pulse: false };
+  return { color: 'text-emerald-500', bg: 'bg-emerald-500/10', Icon: Battery, pulse: false };
 }
 
 interface Props {
@@ -303,6 +315,24 @@ export default function FamilySidebar({
                     ) : (
                       <p className="text-xs text-muted-foreground">{text.noLocation}</p>
                     )}
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {m.location?.is_moving && m.location?.speed && m.location.speed > 3 && (
+                        <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                          <Gauge className="w-2.5 h-2.5" />
+                          {Math.round(m.location.speed)} km/h
+                        </span>
+                      )}
+                      {(() => {
+                        const bat = getBatteryInfo(m.location?.battery_level ?? null);
+                        if (!bat || m.location?.battery_level === null || m.location?.battery_level === undefined) return null;
+                        return (
+                          <span className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${bat.bg} ${bat.color}`}>
+                            <bat.Icon className={`w-2.5 h-2.5 ${bat.pulse ? 'animate-pulse' : ''}`} />
+                            {m.location!.battery_level}%
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </div>
                   <MapPin className="w-4 h-4 text-muted-foreground/50 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </button>
