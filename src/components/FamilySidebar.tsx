@@ -326,8 +326,13 @@ export default function FamilySidebar({
                     )}
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       {m.location?.is_moving && m.location?.speed && m.location.speed > 3 && (
-                        <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                          <Gauge className="w-2.5 h-2.5" />
+                        <span className={cn(
+                          'flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                          m.location.speed > 40
+                            ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                            : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                        )}>
+                          {m.location.speed > 40 ? '🚗' : <Gauge className="w-2.5 h-2.5" />}
                           {Math.round(m.location.speed)} km/h
                         </span>
                       )}
