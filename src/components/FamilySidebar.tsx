@@ -2,15 +2,30 @@ import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Clock, Copy, LogOut, Users, ChevronLeft, ChevronRight, Settings, Moon, Sun, Radio, Trash2, Route } from 'lucide-react';
+import {
+  MapPin,
+  Clock,
+  Copy,
+  LogOut,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  Settings,
+  Moon,
+  Sun,
+  Radio,
+  Trash2,
+  Route,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { enUS, vi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog,
@@ -23,12 +38,80 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-function getFreshnessInfo(timestamp: string) {
+const SIDEBAR_TEXT = {
+  vi: {
+    online: 'Online',
+    recent: 'Gần đây',
+    offline: 'Offline',
+    copied: 'Đã sao chép mã mời!',
+    removeError: 'Không thể xóa thành viên',
+    removed: 'Đã xóa',
+    members: 'Thành viên',
+    noLocation: 'Chưa có vị trí',
+    viewTrip: 'Xem lịch sử di chuyển',
+    removeMember: 'Xóa thành viên',
+    lightMode: 'Chế độ sáng',
+    darkMode: 'Chế độ tối',
+    settings: 'Cài đặt',
+    signOut: 'Đăng xuất',
+    removeMemberTitle: 'Xóa thành viên',
+    removeMemberConfirm: 'Bạn có chắc muốn xóa',
+    fromFamily: 'khỏi nhóm gia đình?',
+    cancel: 'Hủy',
+    remove: 'Xóa',
+  },
+  en: {
+    online: 'Online',
+    recent: 'Recently active',
+    offline: 'Offline',
+    copied: 'Invite code copied!',
+    removeError: 'Unable to remove member',
+    removed: 'Removed',
+    members: 'Members',
+    noLocation: 'No location yet',
+    viewTrip: 'View movement history',
+    removeMember: 'Remove member',
+    lightMode: 'Light mode',
+    darkMode: 'Dark mode',
+    settings: 'Settings',
+    signOut: 'Sign out',
+    removeMemberTitle: 'Remove member',
+    removeMemberConfirm: 'Are you sure you want to remove',
+    fromFamily: 'from this family?',
+    cancel: 'Cancel',
+    remove: 'Remove',
+  },
+};
+
+function getFreshnessInfo(timestamp: string, language: 'vi' | 'en') {
   const diffMs = Date.now() - new Date(timestamp).getTime();
   const diffMin = diffMs / 60000;
-  if (diffMin < 5) return { color: 'bg-emerald-500', label: 'Online', ring: 'ring-emerald-500/30', textClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' };
-  if (diffMin < 30) return { color: 'bg-amber-500', label: 'Gần đây', ring: 'ring-amber-500/30', textClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' };
-  return { color: 'bg-red-500', label: 'Offline', ring: 'ring-red-500/30', textClass: 'bg-red-500/10 text-red-600 dark:text-red-400' };
+  const text = SIDEBAR_TEXT[language];
+
+  if (diffMin < 5) {
+    return {
+      color: 'bg-emerald-500',
+      label: text.online,
+      ring: 'ring-emerald-500/30',
+      textClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    };
+  }
+
+  if (diffMin < 30) {
+    return {
+      color: 'bg-amber-500',
+      label: text.recent,
+      ring: 'ring-amber-500/30',
+      textClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    };
+  }
+
+  return {
+    color: 'bg-red-500',
+    label: text.offline,
+    ring: 'ring-red-500/30',
+    textClass: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  };
 }
 
 interface Props {
@@ -43,20 +126,33 @@ interface Props {
   onMemberRemoved?: () => void;
 }
 
-export default function FamilySidebar({ family, members, onMemberClick, onSignOut, onOpenProfile, onShowTrip, recentlyUpdated = new Set(), liveSharingUserIds = new Set(), onMemberRemoved }: Props) {
+export default function FamilySidebar({
+  family,
+  members,
+  onMemberClick,
+  onSignOut,
+  onOpenProfile,
+  onShowTrip,
+  recentlyUpdated = new Set(),
+  liveSharingUserIds = new Set(),
+  onMemberRemoved,
+}: Props) {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const text = SIDEBAR_TEXT[language];
+  const dateLocale = language === 'vi' ? vi : enUS;
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [removingMember, setRemovingMember] = useState<FamilyMemberWithProfile | null>(null);
 
-  const isAdmin = members.find(m => m.user_id === user?.id)?.role === 'admin';
+  const isAdmin = members.find((m) => m.user_id === user?.id)?.role === 'admin';
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
   const copyInviteCode = () => {
     navigator.clipboard.writeText(family.invite_code);
-    toast({ title: 'Đã sao chép mã mời!' });
+    toast({ title: text.copied });
   };
 
   const handleRemoveMember = async () => {
@@ -68,16 +164,21 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
       .eq('family_id', family.id);
 
     if (error) {
-      toast({ title: 'Lỗi', description: 'Không thể xóa thành viên', variant: 'destructive' });
+      toast({ title: 'Error', description: text.removeError, variant: 'destructive' });
     } else {
-      toast({ title: `Đã xóa ${removingMember.profile.display_name}` });
+      toast({ title: `${text.removed} ${removingMember.profile.display_name}` });
       onMemberRemoved?.();
     }
     setRemovingMember(null);
   };
 
   const getInitials = (name: string) =>
-    name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+    name
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
 
   const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-orange-500', 'bg-violet-500', 'bg-pink-500', 'bg-teal-500'];
 
@@ -88,17 +189,27 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
           <ChevronRight className="w-4 h-4" />
         </Button>
         {members.map((m, i) => {
-          const freshness = m.location ? getFreshnessInfo(m.location.timestamp) : null;
+          const freshness = m.location ? getFreshnessInfo(m.location.timestamp, language) : null;
           const isUpdated = recentlyUpdated.has(m.user_id);
           return (
             <button key={m.user_id} onClick={() => onMemberClick(m)} className="relative group">
-              <Avatar className={cn('w-8 h-8 transition-transform duration-200 group-hover:scale-110', isUpdated && 'animate-bounce-subtle')}>
+              <Avatar
+                className={cn(
+                  'w-8 h-8 transition-transform duration-200 group-hover:scale-110',
+                  isUpdated && 'animate-bounce-subtle'
+                )}
+              >
                 <AvatarFallback className={cn('text-xs text-white', colors[i % colors.length])}>
                   {getInitials(m.profile.display_name)}
                 </AvatarFallback>
               </Avatar>
               {freshness && (
-                <span className={cn('absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card', freshness.color)} />
+                <span
+                  className={cn(
+                    'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card',
+                    freshness.color
+                  )}
+                />
               )}
             </button>
           );
@@ -136,10 +247,10 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
         {/* Members */}
         <div className="flex-1 overflow-auto p-2">
           <p className="text-xs font-medium text-muted-foreground px-2 py-1.5 uppercase tracking-wider">
-            Thành viên ({members.length})
+            {text.members} ({members.length})
           </p>
           {members.map((m, i) => {
-            const freshness = m.location ? getFreshnessInfo(m.location.timestamp) : null;
+            const freshness = m.location ? getFreshnessInfo(m.location.timestamp, language) : null;
             const isUpdated = recentlyUpdated.has(m.user_id);
             const canRemove = isAdmin && m.user_id !== user?.id;
             return (
@@ -149,13 +260,24 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
                   className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/80 transition-all duration-200 text-left"
                 >
                   <div className="relative">
-                    <Avatar className={cn('w-10 h-10 transition-transform duration-200 group-hover:scale-105', freshness ? `ring-2 ${freshness.ring}` : '', isUpdated && 'animate-bounce-subtle ring-2 ring-primary/50')}>
+                    <Avatar
+                      className={cn(
+                        'w-10 h-10 transition-transform duration-200 group-hover:scale-105',
+                        freshness ? `ring-2 ${freshness.ring}` : '',
+                        isUpdated && 'animate-bounce-subtle ring-2 ring-primary/50'
+                      )}
+                    >
                       <AvatarFallback className={cn('text-sm font-medium text-white', colors[i % colors.length])}>
                         {getInitials(m.profile.display_name)}
                       </AvatarFallback>
                     </Avatar>
                     {freshness && (
-                      <span className={cn('absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card transition-colors', freshness.color)} />
+                      <span
+                        className={cn(
+                          'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card transition-colors',
+                          freshness.color
+                        )}
+                      />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -176,10 +298,10 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
                     {m.location ? (
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {formatDistanceToNow(new Date(m.location.timestamp), { addSuffix: true, locale: vi })}
+                        {formatDistanceToNow(new Date(m.location.timestamp), { addSuffix: true, locale: dateLocale })}
                       </p>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Chưa có vị trí</p>
+                      <p className="text-xs text-muted-foreground">{text.noLocation}</p>
                     )}
                   </div>
                   <MapPin className="w-4 h-4 text-muted-foreground/50 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -191,8 +313,11 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 rounded-full"
-                      onClick={(e) => { e.stopPropagation(); onShowTrip(m); }}
-                      title="Xem lịch sử di chuyển"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShowTrip(m);
+                      }}
+                      title={text.viewTrip}
                     >
                       <Route className="w-3.5 h-3.5 text-primary" />
                     </Button>
@@ -202,8 +327,11 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 rounded-full hover:bg-destructive/10"
-                      onClick={(e) => { e.stopPropagation(); setRemovingMember(m); }}
-                      title="Xóa thành viên"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRemovingMember(m);
+                      }}
+                      title={text.removeMember}
                     >
                       <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </Button>
@@ -216,17 +344,32 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
 
         {/* Footer */}
         <div className="p-3 border-t border-border/50 space-y-0.5">
-          <Button variant="ghost" onClick={toggleTheme} className="w-full justify-start text-muted-foreground rounded-xl" size="sm">
+          <Button
+            variant="ghost"
+            onClick={toggleTheme}
+            className="w-full justify-start text-muted-foreground rounded-xl"
+            size="sm"
+          >
             {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
-            {theme === 'dark' ? 'Chế độ sáng' : 'Chế độ tối'}
+            {theme === 'dark' ? text.lightMode : text.darkMode}
           </Button>
           {onOpenProfile && (
-            <Button variant="ghost" onClick={onOpenProfile} className="w-full justify-start text-muted-foreground rounded-xl" size="sm">
-              <Settings className="w-4 h-4 mr-2" /> Cài đặt
+            <Button
+              variant="ghost"
+              onClick={onOpenProfile}
+              className="w-full justify-start text-muted-foreground rounded-xl"
+              size="sm"
+            >
+              <Settings className="w-4 h-4 mr-2" /> {text.settings}
             </Button>
           )}
-          <Button variant="ghost" onClick={onSignOut} className="w-full justify-start text-muted-foreground hover:text-destructive rounded-xl" size="sm">
-            <LogOut className="w-4 h-4 mr-2" /> Đăng xuất
+          <Button
+            variant="ghost"
+            onClick={onSignOut}
+            className="w-full justify-start text-muted-foreground hover:text-destructive rounded-xl"
+            size="sm"
+          >
+            <LogOut className="w-4 h-4 mr-2" /> {text.signOut}
           </Button>
         </div>
       </div>
@@ -235,15 +378,18 @@ export default function FamilySidebar({ family, members, onMemberClick, onSignOu
       <AlertDialog open={!!removingMember} onOpenChange={(open) => !open && setRemovingMember(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xóa thành viên</AlertDialogTitle>
+            <AlertDialogTitle>{text.removeMemberTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc muốn xóa <strong>{removingMember?.profile.display_name}</strong> khỏi nhóm gia đình?
+              {text.removeMemberConfirm} <strong>{removingMember?.profile.display_name}</strong> {text.fromFamily}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRemoveMember} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Xóa
+            <AlertDialogCancel>{text.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveMember}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {text.remove}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

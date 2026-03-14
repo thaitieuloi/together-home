@@ -1,14 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage, type AppLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save, Loader2, User, Bell } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ArrowLeft, Save, Loader2, User, Bell, Languages } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect } from 'react';
 
 interface Props {
   onBack: () => void;
@@ -17,6 +24,7 @@ interface Props {
 
 export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Props) {
   const { user } = useAuth();
+  const { language, setLanguage } = useLanguage();
   const { toast } = useToast();
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
@@ -26,6 +34,7 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
   useEffect(() => {
     if (!user) return;
     setLoading(true);
+
     supabase
       .from('profiles')
       .select('*')
@@ -43,6 +52,7 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
+
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -56,11 +66,24 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
     } else {
       toast({ title: 'Đã lưu thông tin!' });
     }
+
     setSaving(false);
   };
 
+  const handleLanguageChange = (value: string) => {
+    if (value !== 'vi' && value !== 'en') return;
+
+    setLanguage(value as AppLanguage);
+    toast({ title: value === 'vi' ? 'Đã chuyển sang Tiếng Việt' : 'Switched to English' });
+  };
+
   const getInitials = (name: string) =>
-    name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+    name
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
 
   if (loading) {
     return (
@@ -90,9 +113,7 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
           <CardContent className="space-y-4">
             <div className="flex justify-center">
               <Avatar className="w-20 h-20">
-                {avatarUrl ? (
-                  <AvatarImage src={avatarUrl} />
-                ) : null}
+                {avatarUrl ? <AvatarImage src={avatarUrl} /> : null}
                 <AvatarFallback className="bg-primary text-primary-foreground text-xl">
                   {displayName ? getInitials(displayName) : '?'}
                 </AvatarFallback>
@@ -126,6 +147,27 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
               {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
               Lưu thay đổi
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Languages className="w-4 h-4" />
+              Ngôn ngữ hiển thị
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Label>Ngôn ngữ bản đồ & giao diện</Label>
+            <Select value={language} onValueChange={handleLanguageChange}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Chọn ngôn ngữ" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vi">Tiếng Việt (mặc định)</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
 
