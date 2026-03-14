@@ -4,4 +4,8 @@
     <string name="title_activity_main">Family Tracker</string>
     <string name="package_name">app.lovable.familytracker</string>
     <string name="custom_url_scheme">app.lovable.familytracker</string>
+
+    <string name="capacitor_background_geolocation_notification_channel_name">Theo dõi vị trí nền</string>
+    <string name="capacitor_background_geolocation_notification_icon">mipmap/ic_launcher</string>
+    <string name="capacitor_background_geolocation_notification_color">#2563EB</string>
 </resources>

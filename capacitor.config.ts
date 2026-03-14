@@ -8,6 +8,14 @@ const config: CapacitorConfig = {
     url: 'https://91774990-4eed-4eed-b341-3cc928986c36.lovableproject.com?forceHideBadge=true',
     cleartext: true,
   },
+  android: {
+    useLegacyBridge: true,
+  },
+  plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
 };
 
 export default config;
