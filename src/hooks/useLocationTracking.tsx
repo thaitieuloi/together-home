@@ -44,7 +44,6 @@ const MAX_ACCURACY_METERS = 120;
 const MIN_DISTANCE_METERS = 5;
 const INTERVAL_MOVING_MS = 7000;
 const INTERVAL_IDLE_MS = 20000;
-const INTERVAL_BACKGROUND_MS = 30000;
 const SPEED_THRESHOLD_KMH = 3;
 const MAX_PENDING_QUEUE = 300;
 
@@ -57,6 +56,45 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Requests foreground location permission then guides the user to grant
+ * "Allow all the time" (ACCESS_BACKGROUND_LOCATION) in Android Settings.
+ * On Android 11+ the OS does not allow apps to prompt for background
+ * location directly — the user must do it manually in Settings.
+ */
+async function ensureAndroidBackgroundPermission(): Promise<boolean> {
+  try {
+    const fgStatus = await Geolocation.requestPermissions({ permissions: ['location'] });
+
+    if (fgStatus.location !== 'granted') {
+      console.warn('[LocationTracking] Foreground location permission denied.');
+      return false;
+    }
+
+    const checkStatus = await Geolocation.checkPermissions();
+
+    if (checkStatus.location === 'granted') {
+      return true;
+    }
+
+    console.warn(
+      '[LocationTracking] Background location not yet granted. ' +
+        'Guiding user to Settings so they can choose "Allow all the time".'
+    );
+
+    try {
+      await BackgroundGeolocation.openSettings?.();
+    } catch {
+      console.warn('[LocationTracking] openSettings not available on this platform/version.');
+    }
+
+    return false;
+  } catch (err) {
+    console.error('[LocationTracking] Permission check failed:', err);
+    return false;
+  }
+}
+
 export function useLocationTracking() {
   const { user } = useAuth();
   const intervalRef = useRef<TimeoutHandle | null>(null);
@@ -66,9 +104,6 @@ export function useLocationTracking() {
   const pendingQueueRef = useRef<QueuedLocation[]>([]);
 
   const getInterval = useCallback(() => {
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-      return INTERVAL_BACKGROUND_MS;
-    }
     return isMovingRef.current ? INTERVAL_MOVING_MS : INTERVAL_IDLE_MS;
   }, []);
 
@@ -178,7 +213,7 @@ export function useLocationTracking() {
     const startTracking = async () => {
       if (isNative) {
         try {
-          await Geolocation.requestPermissions();
+          await ensureAndroidBackgroundPermission();
 
           try {
             const firstFix = await Geolocation.getCurrentPosition({
@@ -193,9 +228,19 @@ export function useLocationTracking() {
               firstFix.coords.speed
             );
           } catch {
-            // Ignore first-fix failures, watcher + heartbeat will keep trying.
+            // Ignore first-fix failures — the watcher below will keep delivering positions.
           }
 
+          /*
+           * BackgroundGeolocation.addWatcher() starts an Android Foreground Service
+           * (declared in AndroidManifest.xml) that continues delivering GPS positions
+           * even when the app is minimised or the screen is off.
+           *
+           * NOTE: setTimeout / setInterval (scheduleTick) do NOT run when the Android
+           * WebView is paused. On native we rely solely on this native watcher callback
+           * for background updates. The heartbeat tick below is intentionally only used
+           * while the app is in the foreground as an extra safety net.
+           */
           const watcherId = await BackgroundGeolocation.addWatcher(
             {
               backgroundMessage: 'Đang theo dõi vị trí để gia đình bạn luôn biết bạn ở đâu.',
@@ -204,9 +249,21 @@ export function useLocationTracking() {
               stale: false,
               distanceFilter: MIN_DISTANCE_METERS,
             },
-            (position, error) => {
-              if (error?.code === 'NOT_AUTHORIZED') {
-                console.warn('[LocationTracking] Background location not authorized');
+            async (position, error) => {
+              if (error) {
+                if (error.code === 'NOT_AUTHORIZED') {
+                  console.warn(
+                    '[LocationTracking] Background location not authorised. ' +
+                      'Opening Settings so the user can grant "Allow all the time".'
+                  );
+                  try {
+                    await BackgroundGeolocation.openSettings?.();
+                  } catch {
+                    // openSettings may not be available on all OS versions — ignore.
+                  }
+                } else {
+                  console.error('[LocationTracking] Watcher error:', error);
+                }
                 return;
               }
               if (!position) return;
@@ -216,13 +273,22 @@ export function useLocationTracking() {
 
           watcherIdRef.current = watcherId;
 
+          /*
+           * Foreground heartbeat: when the app IS visible, poll at a regular interval
+           * as a safety net in case the native watcher misses a fix.
+           * This tick stops automatically when the WebView is paused by Android.
+           */
           scheduleTick(async () => {
-            const pos = await Geolocation.getCurrentPosition({
-              enableHighAccuracy: true,
-              timeout: 20000,
-              maximumAge: 10000,
-            });
-            await sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed);
+            try {
+              const pos = await Geolocation.getCurrentPosition({
+                enableHighAccuracy: true,
+                timeout: 20000,
+                maximumAge: 10000,
+              });
+              await sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed);
+            } catch {
+              // Ignore individual heartbeat failures.
+            }
           });
         } catch (error) {
           console.error('[LocationTracking] Failed to start native background tracking:', error);
