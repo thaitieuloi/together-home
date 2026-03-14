@@ -1,16 +1,47 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useFamily } from '@/hooks/useFamily';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Bell, MapPin, LogIn, LogOut, Clock, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bell, MapPin, LogIn, LogOut, Clock, Loader2, Shield } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+
+const GEOFENCE_SETTINGS_TEXT = {
+  vi: {
+    title: 'Cài đặt vùng an toàn',
+    prefsTab: 'Thông báo',
+    historyTab: 'Lịch sử sự kiện',
+    noGeofences: 'Chưa có vùng an toàn nào',
+    noGeofencesDesc: 'Tạo vùng an toàn trong màn hình Vùng để bắt đầu nhận thông báo',
+    notifyEnter: 'Khi vào vùng',
+    notifyExit: 'Khi rời vùng',
+    noEvents: t.noEvents,
+    entered: 'đã đến',
+    left: 'đã rời',
+    unknown: t.unknown,
+  },
+  en: {
+    title: 'Zone Settings',
+    prefsTab: 'Notifications',
+    historyTab: 'Event History',
+    noGeofences: 'No zones yet',
+    noGeofencesDesc: 'Create zones in the Zones screen to start receiving notifications',
+    notifyEnter: 'Notify on enter',
+    notifyExit: 'Notify on exit',
+    noEvents: 'No events yet',
+    entered: 'entered',
+    left: 'left',
+    unknown: 'Unknown',
+  },
+};
+
 
 interface GeofencePref {
   geofence_id: string;
@@ -39,6 +70,8 @@ interface Props {
 
 export default function GeofenceSettings({ onBack }: Props) {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const t = GEOFENCE_SETTINGS_TEXT[language];
   const { family, members } = useFamily();
   const [geofences, setGeofences] = useState<Geofence[]>([]);
   const [prefs, setPrefs] = useState<Map<string, GeofencePref>>(new Map());
@@ -83,8 +116,8 @@ export default function GeofenceSettings({ onBack }: Props) {
         .filter((e) => geoMap.has(e.geofence_id))
         .map((e) => ({
           ...e,
-          user_name: memberMap.get(e.user_id) || 'Không rõ',
-          geofence_name: geoMap.get(e.geofence_id) || 'Không rõ',
+          user_name: memberMap.get(e.user_id) || t.unknown,
+          geofence_name: geoMap.get(e.geofence_id) || t.unknown,
         }));
       setEvents(enriched as GeofenceEvent[]);
     }
@@ -143,6 +176,7 @@ export default function GeofenceSettings({ onBack }: Props) {
         </div>
 
         <Tabs defaultValue="settings">
+          {/* tabs */}
           <TabsList className="w-full">
             <TabsTrigger value="settings" className="flex-1">
               <Bell className="w-4 h-4 mr-1" /> Cài đặt
@@ -175,7 +209,7 @@ export default function GeofenceSettings({ onBack }: Props) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm">
                           <LogIn className="w-3.5 h-3.5 text-green-500" />
-                          <span className="text-foreground">Thông báo khi đến</span>
+                          <span className="text-foreground">{t.notifyEnter}</span>
                         </div>
                         <Switch
                           checked={enterOn}
@@ -186,7 +220,7 @@ export default function GeofenceSettings({ onBack }: Props) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm">
                           <LogOut className="w-3.5 h-3.5 text-red-500" />
-                          <span className="text-foreground">Thông báo khi rời đi</span>
+                          <span className="text-foreground">{t.notifyExit}</span>
                         </div>
                         <Switch
                           checked={exitOn}
@@ -228,7 +262,7 @@ export default function GeofenceSettings({ onBack }: Props) {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-foreground">
                                 <span className="font-medium">{ev.user_name}</span>
-                                {isEnter ? ' đã đến ' : ' đã rời '}
+                                {isEnter ? ` ${t.entered} ` : ` ${t.left} `}
                                 <span className="font-medium">{ev.geofence_name}</span>
                               </p>
                               <p className="text-xs text-muted-foreground mt-0.5">
