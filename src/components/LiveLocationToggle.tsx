@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Radio, Square, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Select,
   SelectContent,
@@ -17,12 +18,37 @@ interface LiveLocationToggleProps {
   onStop: () => Promise<void>;
 }
 
+const LIVE_TEXT = {
+  vi: {
+    minutes15: '15 phút',
+    hour1: '1 giờ',
+    hour4: '4 giờ',
+    hour8: '8 giờ',
+    stop: 'Dừng',
+    live: 'Chia sẻ Live',
+    remaining: 'Còn',
+    minuteUnit: 'phút',
+  },
+  en: {
+    minutes15: '15 min',
+    hour1: '1 hour',
+    hour4: '4 hours',
+    hour8: '8 hours',
+    stop: 'Stop',
+    live: 'Live share',
+    remaining: 'Remaining',
+    minuteUnit: 'min',
+  },
+};
+
 export default function LiveLocationToggle({
   isSharing,
   expiresAt,
   onStart,
   onStop,
 }: LiveLocationToggleProps) {
+  const { language } = useLanguage();
+  const text = LIVE_TEXT[language];
   const [duration, setDuration] = useState('60');
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +58,7 @@ export default function LiveLocationToggle({
       if (isSharing) {
         await onStop();
       } else {
-        await onStart(parseInt(duration));
+        await onStart(parseInt(duration, 10));
       }
     } finally {
       setLoading(false);
@@ -51,10 +77,10 @@ export default function LiveLocationToggle({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="15">15 phút</SelectItem>
-            <SelectItem value="60">1 giờ</SelectItem>
-            <SelectItem value="240">4 giờ</SelectItem>
-            <SelectItem value="480">8 giờ</SelectItem>
+            <SelectItem value="15">{text.minutes15}</SelectItem>
+            <SelectItem value="60">{text.hour1}</SelectItem>
+            <SelectItem value="240">{text.hour4}</SelectItem>
+            <SelectItem value="480">{text.hour8}</SelectItem>
           </SelectContent>
         </Select>
       )}
@@ -68,19 +94,19 @@ export default function LiveLocationToggle({
         {isSharing ? (
           <>
             <Square className="w-3.5 h-3.5" />
-            Dừng ({remainingTime}p)
+            {text.stop} ({remainingTime}p)
           </>
         ) : (
           <>
             <Radio className="w-3.5 h-3.5" />
-            Chia sẻ Live
+            {text.live}
           </>
         )}
       </Button>
       {isSharing && (
         <span className="flex items-center gap-1 text-xs text-muted-foreground">
           <Clock className="w-3 h-3" />
-          Còn {remainingTime} phút
+          {text.remaining} {remainingTime} {text.minuteUnit}
         </span>
       )}
     </div>

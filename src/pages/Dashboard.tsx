@@ -5,6 +5,7 @@ import { useLocationTracking } from '@/hooks/useLocationTracking';
 import { useRealtimeLocations } from '@/hooks/useRealtimeLocations';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { useLanguage } from '@/contexts/LanguageContext';
 import FamilySidebar from '@/components/FamilySidebar';
 import FamilyMap from '@/components/FamilyMap';
 import LocationHistory from '@/components/LocationHistory';
@@ -31,10 +32,38 @@ import AnimatedPanel from '@/components/AnimatedPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+const DASHBOARD_TEXT = {
+  vi: {
+    loading: 'Đang tải...',
+    tripTitle: 'Lịch sử di chuyển của',
+    tripDesc: 'điểm trong 3 giờ qua',
+    noDataTitle: 'Không có dữ liệu',
+    noDataDesc: 'Chưa có lịch sử di chuyển gần đây',
+    notifications: 'Thông báo',
+    history: 'Lịch sử',
+    geofence: 'Vùng',
+    chat: 'Chat',
+  },
+  en: {
+    loading: 'Loading...',
+    tripTitle: 'Movement history of',
+    tripDesc: 'points in the last 3 hours',
+    noDataTitle: 'No data',
+    noDataDesc: 'No recent movement history',
+    notifications: 'Alerts',
+    history: 'History',
+    geofence: 'Zones',
+    chat: 'Chat',
+  },
+};
+
 export default function Dashboard() {
   const { signOut } = useAuth();
+  const { language } = useLanguage();
+  const text = DASHBOARD_TEXT[language];
   const { family, members, loading, refetch, updateMemberLocation } = useFamily();
   const { toast } = useToast();
+
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -52,16 +81,24 @@ export default function Dashboard() {
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
-  const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead, deleteNotification, clearAllRead } = useNotifications();
+
+  const {
+    notifications,
+    unreadCount: notifUnread,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    clearAllRead,
+  } = useNotifications();
   const { sessions, mySession, startSharing, stopSharing, isSharing } = useLiveLocationSharing(family?.id);
   const liveSharingUserIds = useMemo(() => new Set(sessions.map((s) => s.user_id)), [sessions]);
 
   const handleRealtimeLocation = useCallback(
     (userId: string, lat: number, lng: number, accuracy: number | null, updatedAt: string) => {
       updateMemberLocation(userId, lat, lng, accuracy, updatedAt);
-      setRecentlyUpdated(prev => new Set(prev).add(userId));
+      setRecentlyUpdated((prev) => new Set(prev).add(userId));
       setTimeout(() => {
-        setRecentlyUpdated(prev => {
+        setRecentlyUpdated((prev) => {
           const next = new Set(prev);
           next.delete(userId);
           return next;
@@ -70,8 +107,8 @@ export default function Dashboard() {
     },
     [updateMemberLocation]
   );
-  useRealtimeLocations(members, handleRealtimeLocation);
 
+  useRealtimeLocations(members, handleRealtimeLocation);
   const { unreadCount } = useUnreadMessages(family?.id, showChat);
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
@@ -81,29 +118,36 @@ export default function Dashboard() {
     setMobileOpen(false);
   };
 
-  const handleShowTrip = useCallback(async (member: FamilyMemberWithProfile) => {
-    // Load last 3 hours of location history for this member
-    const since = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabase
-      .from('user_locations')
-      .select('*')
-      .eq('user_id', member.user_id)
-      .gte('timestamp', since)
-      .order('timestamp', { ascending: false })
-      .limit(500);
+  const handleShowTrip = useCallback(
+    async (member: FamilyMemberWithProfile) => {
+      const since = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from('user_locations')
+        .select('*')
+        .eq('user_id', member.user_id)
+        .gte('timestamp', since)
+        .order('timestamp', { ascending: false })
+        .limit(500);
 
-    if (data && data.length > 0) {
-      setHistoryTrail(data);
-      // Fly to latest position
-      if (member.location) {
-        setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
+      if (data && data.length > 0) {
+        setHistoryTrail(data);
+        setShowHistory(true);
+
+        if (member.location) {
+          setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
+        }
+
+        toast({
+          title: `${text.tripTitle} ${member.profile.display_name}`,
+          description: `${data.length} ${text.tripDesc}`,
+        });
+      } else {
+        toast({ title: text.noDataTitle, description: text.noDataDesc, variant: 'destructive' });
       }
-      toast({ title: `Lịch sử di chuyển của ${member.profile.display_name}`, description: `${data.length} điểm trong 3 giờ qua` });
-    } else {
-      toast({ title: 'Không có dữ liệu', description: 'Chưa có lịch sử di chuyển gần đây', variant: 'destructive' });
-    }
-    setMobileOpen(false);
-  }, [toast]);
+      setMobileOpen(false);
+    },
+    [toast, text.tripDesc, text.tripTitle, text.noDataDesc, text.noDataTitle]
+  );
 
   const handleCloseHistory = () => {
     setShowHistory(false);
@@ -116,10 +160,46 @@ export default function Dashboard() {
     }
   };
 
+  const toggleNotifications = () => {
+    setShowNotifications((prev) => {
+      const next = !prev;
+      if (next) setShowChat(false);
+      return next;
+    });
+  };
+
+  const toggleHistory = () => {
+    setShowHistory((prev) => {
+      const next = !prev;
+      if (next) {
+        setShowGeofences(false);
+      } else {
+        setHistoryTrail([]);
+      }
+      return next;
+    });
+  };
+
+  const toggleGeofences = () => {
+    setShowGeofences((prev) => {
+      const next = !prev;
+      if (next) setShowHistory(false);
+      return next;
+    });
+  };
+
+  const toggleChat = () => {
+    setShowChat((prev) => {
+      const next = !prev;
+      if (next) setShowNotifications(false);
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="animate-pulse-gentle text-muted-foreground">Đang tải...</div>
+        <div className="animate-pulse-gentle text-muted-foreground">{text.loading}</div>
       </div>
     );
   }
@@ -138,15 +218,33 @@ export default function Dashboard() {
 
   if (showProfile) {
     return (
-      <PageTransition show={!exitingProfile} onExitComplete={() => { setShowProfile(false); setExitingProfile(false); }}>
-        <ProfileSettings onBack={handleBackFromProfile} onOpenGeofenceSettings={() => { setShowProfile(false); setShowGeofenceSettings(true); }} />
+      <PageTransition
+        show={!exitingProfile}
+        onExitComplete={() => {
+          setShowProfile(false);
+          setExitingProfile(false);
+        }}
+      >
+        <ProfileSettings
+          onBack={handleBackFromProfile}
+          onOpenGeofenceSettings={() => {
+            setShowProfile(false);
+            setShowGeofenceSettings(true);
+          }}
+        />
       </PageTransition>
     );
   }
 
   if (showGeofenceSettings) {
     return (
-      <PageTransition show={!exitingGeofence} onExitComplete={() => { setShowGeofenceSettings(false); setExitingGeofence(false); }}>
+      <PageTransition
+        show={!exitingGeofence}
+        onExitComplete={() => {
+          setShowGeofenceSettings(false);
+          setExitingGeofence(false);
+        }}
+      >
         <GeofenceSettings onBack={handleBackFromGeofence} />
       </PageTransition>
     );
@@ -173,17 +271,23 @@ export default function Dashboard() {
       <div className="md:hidden absolute top-4 left-4 z-[1000]">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
-            <Button size="icon" variant="secondary" className="shadow-lg rounded-full glass glass-dark">
+            <Button size="icon" variant="secondary" className="shadow-lg rounded-full glass glass-dark h-11 w-11">
               <Menu className="w-5 h-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-72 data-[state=open]:animate-slide-in-left data-[state=closed]:animate-slide-out-left">
+          <SheetContent
+            side="left"
+            className="p-0 w-72 data-[state=open]:animate-slide-in-left data-[state=closed]:animate-slide-out-left"
+          >
             <FamilySidebar
               family={family}
               members={members}
               onMemberClick={handleMemberClick}
               onSignOut={signOut}
-              onOpenProfile={() => { setShowProfile(true); setMobileOpen(false); }}
+              onOpenProfile={() => {
+                setShowProfile(true);
+                setMobileOpen(false);
+              }}
               onShowTrip={handleShowTrip}
               recentlyUpdated={recentlyUpdated}
               liveSharingUserIds={liveSharingUserIds}
@@ -193,14 +297,14 @@ export default function Dashboard() {
         </Sheet>
       </div>
 
-      {/* Top-right controls */}
-      <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
+      {/* Top-right controls (desktop) */}
+      <div className="absolute top-4 right-4 z-[1000] hidden md:flex flex-col gap-2">
         <div className="relative">
           <Button
             size="icon"
             variant={showNotifications ? 'default' : 'secondary'}
             className={cn('shadow-lg rounded-full transition-all duration-200', !showNotifications && 'glass glass-dark')}
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={toggleNotifications}
           >
             <Bell className="w-5 h-5" />
           </Button>
@@ -214,7 +318,7 @@ export default function Dashboard() {
           size="icon"
           variant={showHistory ? 'default' : 'secondary'}
           className={cn('shadow-lg rounded-full transition-all duration-200', !showHistory && 'glass glass-dark')}
-          onClick={() => showHistory ? handleCloseHistory() : setShowHistory(true)}
+          onClick={toggleHistory}
         >
           <History className="w-5 h-5" />
         </Button>
@@ -222,7 +326,7 @@ export default function Dashboard() {
           size="icon"
           variant={showGeofences ? 'default' : 'secondary'}
           className={cn('shadow-lg rounded-full transition-all duration-200', !showGeofences && 'glass glass-dark')}
-          onClick={() => setShowGeofences(!showGeofences)}
+          onClick={toggleGeofences}
         >
           <Shield className="w-5 h-5" />
         </Button>
@@ -243,26 +347,21 @@ export default function Dashboard() {
       </AnimatedPanel>
 
       {/* Live location toggle */}
-      <div className="absolute bottom-6 left-4 z-[1000] md:left-[calc(18rem+1rem)]">
+      <div className="absolute z-[1000] bottom-24 left-1/2 -translate-x-1/2 md:left-[calc(18rem+1rem)] md:bottom-6 md:translate-x-0">
         <div className="bg-card/90 backdrop-blur-sm rounded-xl shadow-lg p-2 border border-border/50">
-          <LiveLocationToggle
-            isSharing={isSharing}
-            expiresAt={mySession?.expires_at}
-            onStart={startSharing}
-            onStop={stopSharing}
-          />
+          <LiveLocationToggle isSharing={isSharing} expiresAt={mySession?.expires_at} onStart={startSharing} onStop={stopSharing} />
         </div>
       </div>
 
-      {/* Bottom buttons */}
-      <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-2 items-end">
+      {/* Desktop bottom buttons */}
+      <div className="absolute bottom-6 right-4 z-[1000] hidden md:flex flex-col gap-2 items-end">
         <SOSButton />
         <div className="relative">
           <Button
             size="icon"
             variant={showChat ? 'default' : 'secondary'}
             className={cn('shadow-lg w-12 h-12 rounded-full transition-all duration-200', !showChat && 'glass glass-dark')}
-            onClick={() => setShowChat(!showChat)}
+            onClick={toggleChat}
           >
             <MessageCircle className="w-5 h-5" />
           </Button>
@@ -274,15 +373,48 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Mobile SOS */}
+      <div className="md:hidden absolute bottom-24 right-4 z-[1000]">
+        <SOSButton />
+      </div>
+
+      {/* Mobile quick actions */}
+      <div className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] w-[calc(100%-1.5rem)]">
+        <div className="glass glass-dark rounded-2xl border border-border/60 p-1.5 grid grid-cols-4 gap-1">
+          <Button variant={showNotifications ? 'default' : 'ghost'} className="h-10 rounded-xl relative" onClick={toggleNotifications}>
+            <Bell className="w-4 h-4" />
+            {notifUnread > 0 && !showNotifications && (
+              <Badge className="absolute -top-1 -right-1 h-4 min-w-[16px] p-0 text-[9px] bg-destructive text-destructive-foreground">
+                {notifUnread > 9 ? '9+' : notifUnread}
+              </Badge>
+            )}
+          </Button>
+          <Button variant={showHistory ? 'default' : 'ghost'} className="h-10 rounded-xl" onClick={toggleHistory}>
+            <History className="w-4 h-4" />
+          </Button>
+          <Button variant={showGeofences ? 'default' : 'ghost'} className="h-10 rounded-xl" onClick={toggleGeofences}>
+            <Shield className="w-4 h-4" />
+          </Button>
+          <Button variant={showChat ? 'default' : 'ghost'} className="h-10 rounded-xl relative" onClick={toggleChat}>
+            <MessageCircle className="w-4 h-4" />
+            {unreadCount > 0 && !showChat && (
+              <Badge className="absolute -top-1 -right-1 h-4 min-w-[16px] p-0 text-[9px] bg-destructive text-destructive-foreground">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
+        <div className="mt-1 text-center text-[10px] text-muted-foreground flex justify-between px-2">
+          <span>{text.notifications}</span>
+          <span>{text.history}</span>
+          <span>{text.geofence}</span>
+          <span>{text.chat}</span>
+        </div>
+      </div>
+
       {/* Chat */}
       <AnimatedPanel open={showChat} onClose={() => setShowChat(false)}>
-        {(handleClose) => (
-          <FamilyChat
-            familyId={family.id}
-            members={members}
-            onClose={handleClose}
-          />
-        )}
+        {(handleClose) => <FamilyChat familyId={family.id} members={members} onClose={handleClose} />}
       </AnimatedPanel>
 
       {/* Geofence manager */}
@@ -309,11 +441,7 @@ export default function Dashboard() {
         />
 
         {showHistory && (
-          <LocationHistory
-            members={members}
-            onHistoryLoaded={setHistoryTrail}
-            onClose={handleCloseHistory}
-          />
+          <LocationHistory members={members} onHistoryLoaded={setHistoryTrail} onClose={handleCloseHistory} />
         )}
       </div>
     </div>
