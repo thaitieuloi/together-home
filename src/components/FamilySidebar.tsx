@@ -1,6 +1,6 @@
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
   MapPin,
@@ -21,6 +21,7 @@ import {
   BatteryWarning,
   BatteryCharging,
   Gauge,
+  WifiOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
@@ -99,6 +100,7 @@ function getFreshnessInfo(timestamp: string, language: 'vi' | 'en') {
       label: text.online,
       ring: 'ring-emerald-500/30',
       textClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+      isOffline: false,
     };
   }
 
@@ -108,6 +110,7 @@ function getFreshnessInfo(timestamp: string, language: 'vi' | 'en') {
       label: text.recent,
       ring: 'ring-amber-500/30',
       textClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+      isOffline: false,
     };
   }
 
@@ -116,6 +119,7 @@ function getFreshnessInfo(timestamp: string, language: 'vi' | 'en') {
     label: text.offline,
     ring: 'ring-red-500/30',
     textClass: 'bg-red-500/10 text-red-600 dark:text-red-400',
+    isOffline: true,
   };
 }
 
@@ -208,9 +212,11 @@ export default function FamilySidebar({
               <Avatar
                 className={cn(
                   'w-8 h-8 transition-transform duration-200 group-hover:scale-110',
-                  isUpdated && 'animate-bounce-subtle'
+                  isUpdated && 'animate-bounce-subtle',
+                  freshness?.isOffline && 'opacity-60'
                 )}
               >
+                {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
                 <AvatarFallback className={cn('text-xs text-white', colors[i % colors.length])}>
                   {getInitials(m.profile.display_name)}
                 </AvatarFallback>
@@ -276,9 +282,11 @@ export default function FamilySidebar({
                       className={cn(
                         'w-10 h-10 transition-transform duration-200 group-hover:scale-105',
                         freshness ? `ring-2 ${freshness.ring}` : '',
-                        isUpdated && 'animate-bounce-subtle ring-2 ring-primary/50'
+                        isUpdated && 'animate-bounce-subtle ring-2 ring-primary/50',
+                        freshness?.isOffline && 'opacity-60'
                       )}
                     >
+                      {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
                       <AvatarFallback className={cn('text-sm font-medium text-white', colors[i % colors.length])}>
                         {getInitials(m.profile.display_name)}
                       </AvatarFallback>
@@ -302,7 +310,8 @@ export default function FamilySidebar({
                         </span>
                       )}
                       {freshness && !liveSharingUserIds.has(m.user_id) && (
-                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', freshness.textClass)}>
+                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5', freshness.textClass)}>
+                          {freshness.isOffline && <WifiOff className="w-2.5 h-2.5" />}
                           {freshness.label}
                         </span>
                       )}

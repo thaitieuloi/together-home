@@ -61,17 +61,19 @@ function createCustomIcon(
   freshnessColor: string,
   displayName: string,
   speedKmh: number | null,
-  isMoving: boolean | null
+  isMoving: boolean | null,
+  isOffline?: boolean
 ) {
   const shortName = displayName.split(' ').pop() ?? displayName;
   const speedBadge =
     isMoving && speedKmh && speedKmh > 3
       ? `<span style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;font-size:9px;font-weight:700;padding:1px 6px;border-radius:999px;white-space:nowrap;border:1.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${Math.round(speedKmh)} km/h</span>`
       : '';
+  const offlineOpacity = isOffline ? 0.6 : 1;
   return L.divIcon({
     className: 'custom-marker',
     html: `
-      <div style="position:relative;width:44px;display:flex;flex-direction:column;align-items:center;">
+      <div style="position:relative;width:44px;display:flex;flex-direction:column;align-items:center;opacity:${offlineOpacity};">
         ${speedBadge}
         <div style="
           width:40px;height:40px;border-radius:50%;
@@ -106,6 +108,7 @@ interface Props {
   flyTo: { lat: number; lng: number } | null;
   historyTrail?: Tables<'user_locations'>[];
   onMapClick?: (lat: number, lng: number) => void;
+  onMemberClick?: (member: FamilyMemberWithProfile) => void;
   showGeofences?: boolean;
   familyId?: string;
   liveSharingUserIds?: Set<string>;
@@ -116,6 +119,7 @@ export default function FamilyMap({
   flyTo,
   historyTrail,
   onMapClick,
+  onMemberClick,
   showGeofences,
   familyId,
   liveSharingUserIds = new Set(),
@@ -334,13 +338,15 @@ export default function FamilyMap({
       const loc = m.location!;
       const latlng: [number, number] = [loc.latitude, loc.longitude];
       const freshness = getFreshnessColor(loc.timestamp, language);
+      const isOffline = (Date.now() - new Date(loc.timestamp).getTime()) / 60000 > 30;
       const icon = createCustomIcon(
         getInitials(m.profile.display_name),
         COLORS[i % COLORS.length],
         freshness.dot,
         m.profile.display_name,
-        loc.speed ?? null,
-        loc.is_moving ?? null
+        loc.speed !== null && loc.speed !== undefined ? loc.speed * 3.6 : null,
+        loc.is_moving ?? null,
+        isOffline
       );
       const isLive = liveSharingUserIds.has(m.user_id);
 
@@ -419,6 +425,7 @@ export default function FamilyMap({
         // New marker
         const marker = L.marker(latlng, { icon });
         marker.bindPopup(popupContent);
+        marker.on('click', () => { onMemberClick?.(m); });
         markerLayerRef.current!.addLayer(marker);
         markersRef.current.set(m.user_id, marker);
 
@@ -484,12 +491,26 @@ export default function FamilyMap({
 
     const latlngs = historyTrail.map((loc) => [loc.latitude, loc.longitude] as [number, number]);
 
-    const polyline = L.polyline(latlngs, {
-      color: '#3b82f6',
-      weight: 3,
-      opacity: 0.7,
-      dashArray: '8 4',
-    });
+    // Draw speed-colored segments
+    for (let i = 0; i < historyTrail.length - 1; i++) {
+      const curr = historyTrail[i];
+      const next = historyTrail[i + 1];
+      const speedMs = curr.speed ?? 0;
+      const kmh = speedMs * 3.6;
+      let segColor = '#6b7280';
+      if (speedMs > 0.5) {
+        if (kmh > 40) segColor = '#ef4444';
+        else if (kmh > 15) segColor = '#f97316';
+        else if (kmh > 5) segColor = '#eab308';
+        else segColor = '#3b82f6';
+      }
+      L.polyline(
+        [[curr.latitude, curr.longitude], [next.latitude, next.longitude]],
+        { color: segColor, weight: 4, opacity: 0.8 }
+      ).addTo(historyLayerRef.current!);
+    }
+
+    const polyline = L.polyline(latlngs, { color: 'transparent', weight: 0, opacity: 0 });
     historyLayerRef.current.addLayer(polyline);
 
     const startLoc = historyTrail[historyTrail.length - 1];
