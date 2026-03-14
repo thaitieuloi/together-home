@@ -45,5 +45,20 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!--
+            Background Geolocation Foreground Service
+            Required by @capacitor-community/background-geolocation.
+            Without this declaration Android will refuse to start the service
+            and location tracking will stop as soon as the app is minimised.
+            android:foregroundServiceType="location" is mandatory from Android 10 (API 29)
+            when the service accesses GPS while in the background.
+        -->
+        <service
+            android:name="com.equimaps.capacitorbackgroundgeolocation.LocationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
     </application>
 </manifest>
