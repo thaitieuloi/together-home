@@ -14,6 +14,7 @@ import ProfileSettings from '@/components/ProfileSettings';
 import GeofenceSettings from '@/components/GeofenceSettings';
 import FamilyChat from '@/components/FamilyChat';
 import MemberActionSheet from '@/components/MemberActionSheet';
+import Onboarding from '@/components/Onboarding';
 import FamilySetup from '@/pages/FamilySetup';
 import LiveLocationToggle from '@/components/LiveLocationToggle';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
@@ -80,6 +81,7 @@ export default function Dashboard() {
   const [exitingGeofence, setExitingGeofence] = useState(false);
   const [selectedMember, setSelectedMember] = useState<FamilyMemberWithProfile | null>(null);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('onboarding_done'));
 
   useLocationTracking();
   usePushNotifications();
@@ -281,6 +283,7 @@ export default function Dashboard() {
   }
 
   return (
+    <>
     <div className="flex h-screen w-full overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden md:flex">
@@ -490,5 +493,9 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+    {showOnboarding && (
+      <Onboarding onDone={() => setShowOnboarding(false)} />
+    )}
+    </>
   );
 }
