@@ -116,6 +116,8 @@ async function ensureAndroidBackgroundPermission(): Promise<boolean> {
   }
 }
 
+const BATTERY_ALERT_THRESHOLD = 20;
+
 export function useLocationTracking() {
   const { user } = useAuth();
   const intervalRef = useRef<TimeoutHandle | null>(null);
@@ -123,6 +125,7 @@ export function useLocationTracking() {
   const lastLocationRef = useRef<{ lat: number; lng: number; time: number } | null>(null);
   const isMovingRef = useRef(false);
   const pendingQueueRef = useRef<QueuedLocation[]>([]);
+  const lastBatteryRef = useRef<number | null>(null);
 
   const getInterval = useCallback(() => {
     return isMovingRef.current ? INTERVAL_MOVING_MS : INTERVAL_IDLE_MS;
@@ -190,6 +193,17 @@ export function useLocationTracking() {
 
       try {
         const batteryLevel = await getBatteryLevel();
+
+        if (
+          batteryLevel !== null &&
+          batteryLevel < BATTERY_ALERT_THRESHOLD &&
+          (lastBatteryRef.current === null || lastBatteryRef.current >= BATTERY_ALERT_THRESHOLD)
+        ) {
+          supabase.functions
+            .invoke('send-battery-alert', { body: { battery_level: batteryLevel } })
+            .catch(() => undefined);
+        }
+        lastBatteryRef.current = batteryLevel;
 
         const [latestRes, historyRes, geofenceRes] = await Promise.all([
           supabase.from('latest_locations').upsert(
