@@ -4,6 +4,12 @@ import { useAuth } from './useAuth';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { Device } from '@capacitor/device';
+import {
+  flushQueuedLocationsNative,
+  persistLocationNative,
+  type NativeQueuedLocation,
+} from '@/lib/locationTrackingTransport';
+import { trackingLog, toErrorMessage } from '@/lib/locationTrackingLogger';
 
 interface BackgroundGeolocationPlugin {
   addWatcher(
@@ -34,10 +40,7 @@ const BackgroundGeolocation = registerPlugin<BackgroundGeolocationPlugin>('Backg
 
 type TimeoutHandle = ReturnType<typeof setTimeout>;
 
-type QueuedLocation = {
-  lat: number;
-  lng: number;
-  accuracy: number | null;
+type QueuedLocation = NativeQueuedLocation & {
   speed: number | null;
 };
 
@@ -47,6 +50,7 @@ const INTERVAL_MOVING_MS = 7000;
 const INTERVAL_IDLE_MS = 20000;
 const SPEED_THRESHOLD_KMH = 3;
 const MAX_PENDING_QUEUE = 300;
+const BATTERY_ALERT_THRESHOLD = 20;
 
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371e3;
@@ -57,10 +61,6 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/**
- * Returns device battery level as 0–100 integer, or null if unavailable.
- * Uses @capacitor/device on native platforms, Web Battery API as fallback.
- */
 async function getBatteryLevel(): Promise<number | null> {
   try {
     if (Capacitor.isNativePlatform()) {
@@ -72,51 +72,43 @@ async function getBatteryLevel(): Promise<number | null> {
       return typeof battery.level === 'number' ? Math.round(battery.level * 100) : null;
     }
   } catch {
-    // Battery info is non-critical; silently ignore errors
+    trackingLog('debug', 'Battery info unavailable');
   }
   return null;
 }
 
-/**
- * Requests foreground location permission then guides the user to grant
- * "Allow all the time" (ACCESS_BACKGROUND_LOCATION) in Android Settings.
- * On Android 11+ the OS does not allow apps to prompt for background
- * location directly — the user must do it manually in Settings.
- */
 async function ensureAndroidBackgroundPermission(): Promise<boolean> {
   try {
     const fgStatus = await Geolocation.requestPermissions({ permissions: ['location'] });
 
     if (fgStatus.location !== 'granted') {
-      console.warn('[LocationTracking] Foreground location permission denied.');
+      trackingLog('warn', 'Foreground location permission denied', { status: fgStatus.location });
       return false;
     }
 
     const checkStatus = await Geolocation.checkPermissions();
 
     if (checkStatus.location === 'granted') {
+      trackingLog('info', 'Location permission granted', { status: checkStatus.location });
       return true;
     }
 
-    console.warn(
-      '[LocationTracking] Background location not yet granted. ' +
-        'Guiding user to Settings so they can choose "Allow all the time".'
-    );
+    trackingLog('warn', 'Background location may be missing, opening settings', {
+      status: checkStatus.location,
+    });
 
     try {
       await BackgroundGeolocation.openSettings?.();
     } catch {
-      console.warn('[LocationTracking] openSettings not available on this platform/version.');
+      trackingLog('warn', 'openSettings not available');
     }
 
     return false;
   } catch (err) {
-    console.error('[LocationTracking] Permission check failed:', err);
+    trackingLog('error', 'Permission check failed', { error: toErrorMessage(err) });
     return false;
   }
 }
-
-const BATTERY_ALERT_THRESHOLD = 20;
 
 export function useLocationTracking() {
   const { user } = useAuth();
@@ -125,6 +117,7 @@ export function useLocationTracking() {
   const lastLocationRef = useRef<{ lat: number; lng: number; time: number } | null>(null);
   const isMovingRef = useRef(false);
   const pendingQueueRef = useRef<QueuedLocation[]>([]);
+  const isFlushingQueueRef = useRef(false);
   const lastBatteryRef = useRef<number | null>(null);
 
   const getInterval = useCallback(() => {
@@ -136,6 +129,14 @@ export function useLocationTracking() {
     if (pendingQueueRef.current.length > MAX_PENDING_QUEUE) {
       pendingQueueRef.current = pendingQueueRef.current.slice(-MAX_PENDING_QUEUE);
     }
+
+    trackingLog('warn', 'Queued location for retry', {
+      queueSize: pendingQueueRef.current.length,
+      lat: location.lat,
+      lng: location.lng,
+      accuracy: location.accuracy,
+      speed: location.speed,
+    });
   }, []);
 
   useEffect(() => {
@@ -144,30 +145,129 @@ export function useLocationTracking() {
     const isNative = Capacitor.isNativePlatform();
     let stopped = false;
 
+    trackingLog('info', 'Tracking started', {
+      userId: user.id,
+      platform: isNative ? 'native' : 'web',
+    });
+
     const flushQueue = async () => {
-      if (pendingQueueRef.current.length === 0 || stopped) return;
+      if (pendingQueueRef.current.length === 0 || stopped || isFlushingQueueRef.current) return;
 
       const batch = [...pendingQueueRef.current];
-      const { error } = await supabase.from('user_locations').insert(
-        batch.map((item) => ({
-          user_id: user.id,
-          latitude: item.lat,
-          longitude: item.lng,
-          accuracy: item.accuracy,
-        }))
-      );
+      isFlushingQueueRef.current = true;
 
-      if (error) {
-        throw error;
+      trackingLog('debug', 'Flushing queued locations', {
+        count: batch.length,
+        platform: isNative ? 'native' : 'web',
+      });
+
+      try {
+        if (isNative) {
+          await flushQueuedLocationsNative(
+            user.id,
+            batch.map((item) => ({ lat: item.lat, lng: item.lng, accuracy: item.accuracy }))
+          );
+        } else {
+          const { error } = await supabase.from('user_locations').insert(
+            batch.map((item) => ({
+              user_id: user.id,
+              latitude: item.lat,
+              longitude: item.lng,
+              accuracy: item.accuracy,
+            }))
+          );
+
+          if (error) throw error;
+        }
+
+        pendingQueueRef.current = [];
+        trackingLog('info', 'Queued locations flushed successfully', { count: batch.length });
+      } catch (err) {
+        trackingLog('warn', 'Queue flush failed', {
+          count: batch.length,
+          error: toErrorMessage(err),
+        });
+      } finally {
+        isFlushingQueueRef.current = false;
+      }
+    };
+
+    const persistLocation = async (
+      lat: number,
+      lng: number,
+      accuracy: number | null,
+      speed: number | null,
+      batteryLevel: number | null
+    ) => {
+      const updatedAt = new Date().toISOString();
+
+      if (isNative) {
+        const { geofenceError } = await persistLocationNative({
+          userId: user.id,
+          lat,
+          lng,
+          accuracy,
+          speed,
+          isMoving: isMovingRef.current,
+          batteryLevel,
+          updatedAt,
+        });
+
+        if (geofenceError) {
+          trackingLog('warn', 'Geofence check failed (non-blocking)', { geofenceError });
+        }
+
+        return;
       }
 
-      pendingQueueRef.current = [];
+      const [latestRes, historyRes] = await Promise.all([
+        supabase.from('latest_locations').upsert(
+          {
+            user_id: user.id,
+            latitude: lat,
+            longitude: lng,
+            accuracy,
+            speed,
+            is_moving: isMovingRef.current,
+            battery_level: batteryLevel,
+            updated_at: updatedAt,
+          },
+          { onConflict: 'user_id' }
+        ),
+        supabase.from('user_locations').insert({
+          user_id: user.id,
+          latitude: lat,
+          longitude: lng,
+          accuracy,
+        }),
+      ]);
+
+      if (latestRes.error) throw latestRes.error;
+      if (historyRes.error) throw historyRes.error;
+
+      supabase.functions
+        .invoke('check-geofence', {
+          body: { user_id: user.id, latitude: lat, longitude: lng },
+        })
+        .then(({ error }) => {
+          if (error) {
+            trackingLog('warn', 'Geofence check failed (non-blocking)', {
+              error: toErrorMessage(error),
+            });
+          }
+        })
+        .catch((err) => {
+          trackingLog('warn', 'Geofence invoke failed (non-blocking)', {
+            error: toErrorMessage(err),
+          });
+        });
     };
 
     const sendLocation = async (lat: number, lng: number, accuracy: number | null, speed: number | null) => {
       if (stopped) return;
 
       if (accuracy !== null && accuracy > MAX_ACCURACY_METERS && lastLocationRef.current !== null) {
+        trackingLog('debug', 'Skipped inaccurate location', { accuracy, max: MAX_ACCURACY_METERS });
         return;
       }
 
@@ -179,6 +279,7 @@ export function useLocationTracking() {
         const timeDiffSec = (now - lastLocationRef.current.time) / 1000;
 
         if (dist < MIN_DISTANCE_METERS) {
+          trackingLog('debug', 'Skipped tiny movement', { dist, min: MIN_DISTANCE_METERS });
           return;
         }
 
@@ -201,57 +302,65 @@ export function useLocationTracking() {
         ) {
           supabase.functions
             .invoke('send-battery-alert', { body: { battery_level: batteryLevel } })
-            .catch(() => undefined);
+            .catch((err) => {
+              trackingLog('warn', 'Battery alert invoke failed (non-blocking)', {
+                error: toErrorMessage(err),
+              });
+            });
         }
         lastBatteryRef.current = batteryLevel;
 
-        const [latestRes, historyRes, geofenceRes] = await Promise.all([
-          supabase.from('latest_locations').upsert(
-            {
-              user_id: user.id,
-              latitude: lat,
-              longitude: lng,
-              accuracy,
-              speed: calculatedSpeed,
-              is_moving: isMovingRef.current,
-              battery_level: batteryLevel,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id' }
-          ),
-          supabase.from('user_locations').insert({
-            user_id: user.id,
-            latitude: lat,
-            longitude: lng,
-            accuracy,
-          }),
-          supabase.functions.invoke('check-geofence', {
-            body: { user_id: user.id, latitude: lat, longitude: lng },
-          }),
-        ]);
+        await persistLocation(lat, lng, accuracy, calculatedSpeed, batteryLevel);
 
-        if (latestRes.error) throw latestRes.error;
-        if (historyRes.error) throw historyRes.error;
-        if (geofenceRes.error) throw geofenceRes.error;
+        trackingLog('info', 'Location sent to server', {
+          lat,
+          lng,
+          accuracy,
+          speed: calculatedSpeed,
+          moving: isMovingRef.current,
+          batteryLevel,
+          queueSize: pendingQueueRef.current.length,
+          platform: isNative ? 'native' : 'web',
+        });
 
         await flushQueue();
-      } catch {
+      } catch (err) {
         enqueuePending({ lat, lng, accuracy, speed: calculatedSpeed });
+        trackingLog('error', 'Failed sending location, queued for retry', {
+          error: toErrorMessage(err),
+          queueSize: pendingQueueRef.current.length,
+          lat,
+          lng,
+          accuracy,
+          speed: calculatedSpeed,
+        });
       }
     };
 
     const scheduleTick = (tick: () => Promise<void> | void) => {
       if (intervalRef.current) clearTimeout(intervalRef.current);
-      intervalRef.current = setTimeout(async () => {
-        await tick();
-        if (!stopped) scheduleTick(tick);
-      }, getInterval());
+
+      const delay = getInterval();
+      intervalRef.current = setTimeout(() => {
+        Promise.resolve(tick())
+          .catch((err) => {
+            trackingLog('warn', 'Heartbeat tick failed', { error: toErrorMessage(err) });
+          })
+          .finally(() => {
+            if (!stopped) scheduleTick(tick);
+          });
+      }, delay);
+
+      trackingLog('debug', 'Heartbeat scheduled', { delay });
     };
 
     const startTracking = async () => {
       if (isNative) {
         try {
-          await ensureAndroidBackgroundPermission();
+          const permissionGranted = await ensureAndroidBackgroundPermission();
+          if (!permissionGranted) {
+            trackingLog('warn', 'Background permission not fully granted yet');
+          }
 
           try {
             const firstFix = await Geolocation.getCurrentPosition({
@@ -259,26 +368,24 @@ export function useLocationTracking() {
               timeout: 20000,
               maximumAge: 10000,
             });
+
+            trackingLog('info', 'First GPS fix acquired', {
+              lat: firstFix.coords.latitude,
+              lng: firstFix.coords.longitude,
+              accuracy: firstFix.coords.accuracy,
+              speed: firstFix.coords.speed,
+            });
+
             await sendLocation(
               firstFix.coords.latitude,
               firstFix.coords.longitude,
               firstFix.coords.accuracy,
               firstFix.coords.speed
             );
-          } catch {
-            // Ignore first-fix failures — the watcher below will keep delivering positions.
+          } catch (err) {
+            trackingLog('warn', 'Initial GPS fix failed', { error: toErrorMessage(err) });
           }
 
-          /*
-           * BackgroundGeolocation.addWatcher() starts an Android Foreground Service
-           * (declared in AndroidManifest.xml) that continues delivering GPS positions
-           * even when the app is minimised or the screen is off.
-           *
-           * NOTE: setTimeout / setInterval (scheduleTick) do NOT run when the Android
-           * WebView is paused. On native we rely solely on this native watcher callback
-           * for background updates. The heartbeat tick below is intentionally only used
-           * while the app is in the foreground as an extra safety net.
-           */
           const watcherId = await BackgroundGeolocation.addWatcher(
             {
               backgroundMessage: 'Đang theo dõi vị trí để gia đình bạn luôn biết bạn ở đâu.',
@@ -290,32 +397,45 @@ export function useLocationTracking() {
             async (position, error) => {
               if (error) {
                 if (error.code === 'NOT_AUTHORIZED') {
-                  console.warn(
-                    '[LocationTracking] Background location not authorised. ' +
-                      'Opening Settings so the user can grant "Allow all the time".'
-                  );
+                  trackingLog('warn', 'Background watcher not authorized, opening settings', {
+                    code: error.code,
+                    message: error.message,
+                  });
                   try {
                     await BackgroundGeolocation.openSettings?.();
-                  } catch {
-                    // openSettings may not be available on all OS versions — ignore.
+                  } catch (openErr) {
+                    trackingLog('warn', 'Cannot open settings from watcher', {
+                      error: toErrorMessage(openErr),
+                    });
                   }
                 } else {
-                  console.error('[LocationTracking] Watcher error:', error);
+                  trackingLog('error', 'Background watcher error', {
+                    code: error.code,
+                    message: error.message,
+                  });
                 }
                 return;
               }
-              if (!position) return;
+
+              if (!position) {
+                trackingLog('debug', 'Watcher emitted empty position');
+                return;
+              }
+
+              trackingLog('debug', 'Watcher emitted location', {
+                lat: position.latitude,
+                lng: position.longitude,
+                accuracy: position.accuracy,
+                speed: position.speed,
+              });
+
               void sendLocation(position.latitude, position.longitude, position.accuracy, position.speed);
             }
           );
 
           watcherIdRef.current = watcherId;
+          trackingLog('info', 'Background watcher registered', { watcherId });
 
-          /*
-           * Foreground heartbeat: when the app IS visible, poll at a regular interval
-           * as a safety net in case the native watcher misses a fix.
-           * This tick stops automatically when the WebView is paused by Android.
-           */
           scheduleTick(async () => {
             try {
               const pos = await Geolocation.getCurrentPosition({
@@ -323,24 +443,46 @@ export function useLocationTracking() {
                 timeout: 20000,
                 maximumAge: 10000,
               });
+
+              trackingLog('debug', 'Foreground heartbeat location captured', {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+                speed: pos.coords.speed,
+              });
+
               await sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.speed);
-            } catch {
-              // Ignore individual heartbeat failures.
+            } catch (err) {
+              trackingLog('warn', 'Foreground heartbeat getCurrentPosition failed', {
+                error: toErrorMessage(err),
+              });
             }
           });
         } catch (error) {
-          console.error('[LocationTracking] Failed to start native background tracking:', error);
+          trackingLog('error', 'Failed to start native tracking', {
+            error: toErrorMessage(error),
+          });
         }
 
         return;
       }
 
-      if (!navigator.geolocation) return;
+      if (!navigator.geolocation) {
+        trackingLog('warn', 'Navigator geolocation not available on web');
+        return;
+      }
 
       const sendCurrentLocation = async () => {
         await new Promise<void>((resolve) => {
           navigator.geolocation.getCurrentPosition(
             async (pos) => {
+              trackingLog('debug', 'Web geolocation acquired', {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+                speed: pos.coords.speed,
+              });
+
               await sendLocation(
                 pos.coords.latitude,
                 pos.coords.longitude,
@@ -349,7 +491,13 @@ export function useLocationTracking() {
               );
               resolve();
             },
-            () => resolve(),
+            (err) => {
+              trackingLog('warn', 'Web geolocation failed', {
+                code: err.code,
+                message: err.message,
+              });
+              resolve();
+            },
             { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
           );
         });
@@ -357,23 +505,36 @@ export function useLocationTracking() {
 
       void sendCurrentLocation();
       scheduleTick(sendCurrentLocation);
-
-      const handleVisibility = () => scheduleTick(sendCurrentLocation);
-      document.addEventListener('visibilitychange', handleVisibility);
-
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibility);
-      };
     };
+
+    const handleVisibility = () => {
+      trackingLog('debug', 'Visibility changed', { state: document.visibilityState });
+      if (document.visibilityState === 'visible') {
+        void flushQueue();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
 
     const cleanupPromise = startTracking();
 
     return () => {
       stopped = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
       cleanupPromise?.then((cleanup) => cleanup?.());
 
       if (watcherIdRef.current !== null) {
-        void BackgroundGeolocation.removeWatcher({ id: watcherIdRef.current }).catch(() => undefined);
+        const watcherId = watcherIdRef.current;
+        void BackgroundGeolocation.removeWatcher({ id: watcherId })
+          .then(() => {
+            trackingLog('info', 'Background watcher removed', { watcherId });
+          })
+          .catch((err) => {
+            trackingLog('warn', 'Failed removing background watcher', {
+              watcherId,
+              error: toErrorMessage(err),
+            });
+          });
         watcherIdRef.current = null;
       }
 
@@ -381,6 +542,10 @@ export function useLocationTracking() {
         clearTimeout(intervalRef.current);
         intervalRef.current = null;
       }
+
+      trackingLog('info', 'Tracking stopped', {
+        pendingQueue: pendingQueueRef.current.length,
+      });
     };
   }, [user, getInterval, enqueuePending]);
 }
