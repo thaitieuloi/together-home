@@ -34,7 +34,7 @@ const SLIDES = {
       color: 'text-blue-500',
       bg: 'bg-blue-500/10',
       title: 'Know where everyone is',
-      desc: 'See your family's real-time location on the map. Stay connected, no matter the distance.',
+      desc: "See your family's real-time location on the map. Stay connected, no matter the distance.",
     },
     {
       icon: Bell,
