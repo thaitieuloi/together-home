@@ -22,10 +22,10 @@ const GEOFENCE_SETTINGS_TEXT = {
     noGeofencesDesc: 'Tạo vùng an toàn trong màn hình Vùng để bắt đầu nhận thông báo',
     notifyEnter: 'Khi vào vùng',
     notifyExit: 'Khi rời vùng',
-    noEvents: t.noEvents,
+    noEvents: 'Chưa có sự kiện',
     entered: 'đã đến',
     left: 'đã rời',
-    unknown: t.unknown,
+    unknown: 'Không xác định',
   },
   en: {
     title: 'Zone Settings',

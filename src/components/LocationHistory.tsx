@@ -81,6 +81,10 @@ function getSpeedColor(speedMs: number | null): string {
   return '#3b82f6';
 }
 
+function getLocationSpeed(location: Tables<'user_locations'>): number | null {
+  return (location as { speed?: number | null }).speed ?? null;
+}
+
 export default function LocationHistory({ members, onHistoryLoaded, onClose }: Props) {
   const { language } = useLanguage();
   const t = TEXT[language];
