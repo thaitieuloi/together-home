@@ -495,7 +495,7 @@ export default function FamilyMap({
     for (let i = 0; i < historyTrail.length - 1; i++) {
       const curr = historyTrail[i];
       const next = historyTrail[i + 1];
-      const speedMs = curr.speed ?? 0;
+      const speedMs = (curr as { speed?: number | null }).speed ?? 0;
       const kmh = speedMs * 3.6;
       let segColor = '#6b7280';
       if (speedMs > 0.5) {
