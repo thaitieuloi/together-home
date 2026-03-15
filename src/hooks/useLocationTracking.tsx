@@ -521,7 +521,7 @@ export function useLocationTracking() {
     return () => {
       stopped = true;
       document.removeEventListener('visibilitychange', handleVisibility);
-      cleanupPromise?.then((cleanup) => cleanup?.());
+      cleanupPromise?.catch(() => undefined);
 
       if (watcherIdRef.current !== null) {
         const watcherId = watcherIdRef.current;
