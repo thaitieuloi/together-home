@@ -214,8 +214,9 @@ export default function LocationHistory({ members, onHistoryLoaded, onClose }: P
           <ScrollArea className="h-48">
             <div className="divide-y divide-border">
               {trail.map((loc, i) => {
-                const speedColor = getSpeedColor(loc.speed);
-                const travelLabel = getTravelMode(loc.speed, t);
+                const speedMs = getLocationSpeed(loc);
+                const speedColor = getSpeedColor(speedMs);
+                const travelLabel = getTravelMode(speedMs, t);
                 return (
                   <div key={loc.id ?? i} className="flex items-start gap-2 p-2">
                     <div
@@ -228,9 +229,9 @@ export default function LocationHistory({ members, onHistoryLoaded, onClose }: P
                           {format(new Date(loc.timestamp), 'HH:mm', { locale: dateLocale })}
                         </span>
                         <span className="text-[10px] text-muted-foreground">{travelLabel}</span>
-                        {loc.speed && loc.speed > 0.5 && (
+                        {speedMs && speedMs > 0.5 && (
                           <span className="text-[10px] font-medium" style={{ color: speedColor }}>
-                            {Math.round(loc.speed * 3.6)} km/h
+                            {Math.round(speedMs * 3.6)} km/h
                           </span>
                         )}
                       </div>
