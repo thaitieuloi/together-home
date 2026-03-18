@@ -410,6 +410,39 @@ export type Database = {
         }
         Relationships: []
       }
+      users: {
+        Row: {
+          created_at: string | null
+          email: string
+          family_id: string
+          id: string
+          is_location_sharing: boolean | null
+          last_seen: string | null
+          name: string
+          photo_url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          family_id: string
+          id: string
+          is_location_sharing?: boolean | null
+          last_seen?: string | null
+          name: string
+          photo_url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          family_id?: string
+          id?: string
+          is_location_sharing?: boolean | null
+          last_seen?: string | null
+          name?: string
+          photo_url?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
