@@ -67,23 +67,37 @@ export function useFamily() {
     const userIds = membersData.map((m) => m.user_id);
 
     // Batch fetch: profiles + latest_locations in parallel
-    const [profilesRes, locationsRes] = await Promise.all([
+    // Also fetch from 'users' table as fallback for names
+    const [profilesRes, locationsRes, usersRes] = await Promise.all([
       supabase.from('profiles').select('*').in('user_id', userIds),
       supabase.from('latest_locations').select('*').in('user_id', userIds),
+      supabase.from('users' as any).select('*').in('id', userIds),
     ]);
 
     const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.user_id, p]));
     const locationMap = new Map((locationsRes.data ?? []).map((l) => [l.user_id, l]));
+    const legacyUserMap = new Map(((usersRes.data as any[]) ?? []).map((u) => [u.id, u]));
 
     const memberProfiles: FamilyMemberWithProfile[] = [];
     for (const m of membersData) {
       const profile = profileMap.get(m.user_id);
-      if (!profile) continue;
+      const legacyUser = legacyUserMap.get(m.user_id);
+      
+      // Use profile if exists, otherwise fallback to legacy users table
+      if (!profile && !legacyUser) continue;
+
+      const finalizedProfile = profile || {
+        user_id: m.user_id,
+        display_name: legacyUser?.name || 'Unknown',
+        avatar_url: legacyUser?.photo_url || null,
+        created_at: legacyUser?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
 
       const loc = locationMap.get(m.user_id);
       memberProfiles.push({
         ...m,
-        profile,
+        profile: finalizedProfile as any,
         location: loc
           ? {
               latitude: loc.latitude,
@@ -151,6 +165,9 @@ export function useFamily() {
       role: 'admin',
     });
 
+    // Also update legacy users table for Flutter compatibility
+    await supabase.from('users' as any).update({ family_id: newFamily.id }).eq('id', user.id);
+
     await fetchFamily();
     return newFamily;
   };
@@ -175,6 +192,10 @@ export function useFamily() {
     });
 
     if (error) throw error;
+
+    // Also update legacy users table for Flutter compatibility
+    await supabase.from('users' as any).update({ family_id: familyData.id }).eq('id', user.id);
+
     await fetchFamily();
   };
 
