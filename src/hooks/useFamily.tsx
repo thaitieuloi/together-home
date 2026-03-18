@@ -166,7 +166,11 @@ export function useFamily() {
     });
 
     // Also update legacy users table for Flutter compatibility
-    await supabase.from('users' as any).update({ family_id: newFamily.id }).eq('id', user.id);
+    try {
+      await supabase.from('users' as any).update({ family_id: newFamily.id }).eq('id', user.id);
+    } catch (usersErr) {
+      console.warn('Sync to legacy users table failed:', usersErr);
+    }
 
     await fetchFamily();
     return newFamily;
@@ -194,7 +198,11 @@ export function useFamily() {
     if (error) throw error;
 
     // Also update legacy users table for Flutter compatibility
-    await supabase.from('users' as any).update({ family_id: familyData.id }).eq('id', user.id);
+    try {
+      await supabase.from('users' as any).update({ family_id: familyData.id }).eq('id', user.id);
+    } catch (usersErr) {
+      console.warn('Sync to legacy users table failed:', usersErr);
+    }
 
     await fetchFamily();
   };

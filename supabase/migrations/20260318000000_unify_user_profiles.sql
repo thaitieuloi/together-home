@@ -28,20 +28,30 @@ BEGIN
     );
 
     -- Sync with public.profiles (Web app)
-    INSERT INTO public.profiles (user_id, display_name, created_at, updated_at)
-    VALUES (NEW.id, _display_name, NOW(), NOW())
+    INSERT INTO public.profiles (user_id, display_name, updated_at)
+    VALUES (NEW.id, _display_name, NOW())
     ON CONFLICT (user_id) DO UPDATE
     SET 
         display_name = EXCLUDED.display_name,
         updated_at = NOW();
 
     -- Sync with public.users (Flutter app compatibility)
-    INSERT INTO public.users (id, name, email, family_id, is_location_sharing, created_at)
-    VALUES (NEW.id, _display_name, NEW.email, '', TRUE, NOW())
-    ON CONFLICT (id) DO UPDATE
-    SET 
-        name = EXCLUDED.name,
-        email = EXCLUDED.email;
+    -- Using a block to handle possible email conflicts more gracefully
+    BEGIN
+        INSERT INTO public.users (id, name, email, family_id, is_location_sharing, created_at)
+        VALUES (NEW.id, _display_name, NEW.email, '', TRUE, NOW())
+        ON CONFLICT (id) DO UPDATE
+        SET 
+            name = EXCLUDED.name,
+            email = EXCLUDED.email;
+    EXCEPTION WHEN unique_violation THEN
+        -- If email conflict occurs, update the record by email instead
+        UPDATE public.users 
+        SET 
+            id = NEW.id,
+            name = _display_name
+        WHERE email = NEW.email;
+    END;
 
     RETURN NEW;
 END;
