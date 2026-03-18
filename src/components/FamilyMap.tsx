@@ -137,7 +137,11 @@ export default function FamilyMap({
   const hasFittedBoundsRef = useRef(false);
   const animationFramesRef = useRef<Map<string, number>>(new Map());
 
-  const membersWithLocation = useMemo(() => members.filter((m) => m.location), [members]);
+  // Filter out members with no location OR very inaccurate IP-based locations (accuracy > 5000m)
+  const membersWithLocation = useMemo(
+    () => members.filter((m) => m.location && (m.location.accuracy === null || m.location.accuracy < 5000)),
+    [members]
+  );
   const mapText = MAP_TEXT[language];
   const dateLocale = language === 'vi' ? vi : enUS;
 
