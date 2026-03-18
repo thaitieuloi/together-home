@@ -1,96 +1,94 @@
+-- ============================================
+-- UNIFY USER PROFILES & FIX REGISTRATION (PRODUCTION)
+-- ============================================
 
--- Migration to unify profiles and users tables and fix the registration trigger
--- This ensures that users registered via Web appear in the Flutter app and vice versa.
 
--- 1. Create the users table if it doesn't exist (matching Flutter schema)
-CREATE TABLE IF NOT EXISTS public.users (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    photo_url TEXT,
-    family_id TEXT, -- Allow null initially to avoid trigger failure
-    is_location_sharing BOOLEAN DEFAULT TRUE,
-    last_seen TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- 1. Cleanly recreate the function and trigger
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
--- 2. Update the handle_new_user function to sync both tables correctly
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
     _display_name TEXT;
+    _invite_code TEXT;
+    _family_id UUID;
 BEGIN
-    -- Extract display name from metadata, supporting both 'display_name' (Web) and 'name' (Flutter)
+    -- Extract info from metadata (supports both Web and Flutter keys)
     _display_name := COALESCE(
         NEW.raw_user_meta_data->>'display_name',
         NEW.raw_user_meta_data->>'name',
-        NEW.email
+        NEW.email,
+        'User'
     );
+    _invite_code := NEW.raw_user_meta_data->>'invite_code';
 
-    -- Sync with public.profiles (Web app)
+    -- 1. Sync with public.profiles (Web App)
     INSERT INTO public.profiles (user_id, display_name, updated_at)
     VALUES (NEW.id, _display_name, NOW())
     ON CONFLICT (user_id) DO UPDATE
-    SET 
-        display_name = EXCLUDED.display_name,
-        updated_at = NOW();
+    SET display_name = EXCLUDED.display_name, updated_at = NOW();
 
-    -- Sync with public.users (Flutter app compatibility)
-    -- Using a block to handle possible email conflicts more gracefully
+    -- 2. Sync with public.users (Flutter App Compatibility)
     BEGIN
         INSERT INTO public.users (id, name, email, family_id, is_location_sharing, created_at)
         VALUES (NEW.id, _display_name, NEW.email, '', TRUE, NOW())
         ON CONFLICT (id) DO UPDATE
-        SET 
-            name = EXCLUDED.name,
-            email = EXCLUDED.email;
-    EXCEPTION WHEN unique_violation THEN
-        -- If email conflict occurs, update the record by email instead
-        UPDATE public.users 
-        SET 
-            id = NEW.id,
-            name = _display_name
-        WHERE email = NEW.email;
+        SET name = EXCLUDED.name, email = EXCLUDED.email;
+    EXCEPTION WHEN OTHERS THEN
+        NULL; -- Ensure registration completes even if legacy syncing has issues
     END;
+
+    -- 3. Automatic Family Joining (Fixes Mobile RLS issues)
+    IF _invite_code IS NOT NULL AND _invite_code <> '' THEN
+        -- Case-insensitive lookup
+        SELECT id INTO _family_id FROM public.families 
+        WHERE UPPER(TRIM(invite_code)) = UPPER(TRIM(_invite_code)) 
+        LIMIT 1;
+        
+        IF _family_id IS NOT NULL THEN
+            -- Add to family_members
+            INSERT INTO public.family_members (family_id, user_id, role)
+            VALUES (_family_id, NEW.id, 'member')
+            ON CONFLICT (family_id, user_id) DO NOTHING;
+            
+            -- Keep legacy family_id in sync
+            UPDATE public.users SET family_id = _family_id::text WHERE id = NEW.id;
+        END IF;
+    END IF;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- 2.1 Enable RLS and add basic policies (if not exists)
+-- Re-establish trigger
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 2. Ensure RLS Policies are clean
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view all users"
-    ON public.users FOR SELECT
-    TO authenticated
-    USING (true);
+DROP POLICY IF EXISTS "Users can view all users" ON public.users;
+CREATE POLICY "Users can view all users" ON public.users FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY "Users can insert own profile"
-    ON public.users FOR INSERT
-    TO authenticated
-    WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
+CREATE POLICY "Users can insert own profile" ON public.users FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Users can update own profile"
-    ON public.users FOR UPDATE
-    TO authenticated
-    USING (auth.uid() = id)
-    WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
+CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Admins can update family members"
-    ON public.users FOR UPDATE
-    TO authenticated
-    USING (true)
-    WITH CHECK (true);
+DROP POLICY IF EXISTS "Admins can update family members" ON public.users;
+CREATE POLICY "Admins can update family members" ON public.users FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
--- 3. Sync existing data (Optional but recommended)
--- Backfill profiles from users
-INSERT INTO public.profiles (user_id, display_name, created_at, updated_at)
-SELECT id, name, created_at, created_at FROM public.users
-ON CONFLICT (user_id) DO NOTHING;
-
--- Backfill users from profiles
-INSERT INTO public.users (id, name, email, family_id, created_at)
-SELECT p.user_id, p.display_name, u.email, '', p.created_at 
-FROM public.profiles p
-JOIN auth.users u ON p.user_id = u.id
+-- 3. SYNC EXISTING DATA (Final push)
+-- Ensure every profile has a user record and vice versa
+INSERT INTO public.users (id, name, email, family_id, is_location_sharing, created_at)
+SELECT u.id, COALESCE(p.display_name, u.email), u.email, '', TRUE, u.created_at
+FROM auth.users u
+LEFT JOIN public.profiles p ON u.id = p.user_id
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.profiles (user_id, display_name, updated_at)
+SELECT u.id, COALESCE(u.name, 'User'), NOW()
+FROM public.users u
+ON CONFLICT (user_id) DO NOTHING;

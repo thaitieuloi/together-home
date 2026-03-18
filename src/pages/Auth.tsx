@@ -18,6 +18,7 @@ export default function Auth() {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupName, setSignupName] = useState('');
+  const [signupInviteCode, setSignupInviteCode] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +35,7 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      await signUp(signupEmail, signupPassword, signupName);
+      await signUp(signupEmail, signupPassword, signupName, signupInviteCode);
       toast({ title: 'Đăng ký thành công', description: 'Kiểm tra email để xác nhận tài khoản.' });
     } catch (err: any) {
       toast({ title: 'Lỗi đăng ký', description: err.message, variant: 'destructive' });
@@ -113,6 +114,12 @@ export default function Auth() {
                     onChange={(e) => setSignupPassword(e.target.value)}
                     required
                     minLength={6}
+                    className="h-11 rounded-xl"
+                  />
+                  <Input
+                    placeholder="Mã mời gia đình (tùy chọn)"
+                    value={signupInviteCode}
+                    onChange={(e) => setSignupInviteCode(e.target.value)}
                     className="h-11 rounded-xl"
                   />
                   <Button type="submit" className="w-full h-11 rounded-xl font-medium" disabled={loading}>
