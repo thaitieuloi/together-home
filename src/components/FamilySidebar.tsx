@@ -156,6 +156,7 @@ export default function FamilySidebar({
   recentlyUpdated = new Set(),
   liveSharingUserIds = new Set(),
   onMemberRemoved,
+  activeSOSUserIds = new Set(),
 }: Props) {
   const { user } = useAuth();
   const { language } = useLanguage();
