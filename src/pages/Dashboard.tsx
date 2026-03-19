@@ -21,7 +21,7 @@ import FamilyAdmin from '@/components/FamilyAdmin';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-import { Menu, History, Shield, MessageCircle, Bell } from 'lucide-react';
+import { Menu, History, Shield, MessageCircle, Bell, Bug } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
