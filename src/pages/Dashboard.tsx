@@ -402,6 +402,14 @@ export default function Dashboard() {
         >
           <Shield className="w-5 h-5" />
         </Button>
+        <Button
+          size="icon"
+          variant={showDebug ? 'default' : 'secondary'}
+          className={cn('shadow-lg rounded-full transition-all duration-200', !showDebug && 'glass glass-dark')}
+          onClick={() => setShowDebug((p) => !p)}
+        >
+          <Bug className="w-5 h-5" />
+        </Button>
       </div>
 
       {/* Notification panel */}
