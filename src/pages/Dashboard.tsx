@@ -93,6 +93,7 @@ export default function Dashboard() {
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
+  const activeSOSUserIds = useActiveSOSAlerts();
 
   const {
     notifications,
