@@ -142,6 +142,7 @@ interface Props {
   recentlyUpdated?: Set<string>;
   liveSharingUserIds?: Set<string>;
   onMemberRemoved?: () => void;
+  activeSOSUserIds?: Set<string>;
 }
 
 export default function FamilySidebar({
