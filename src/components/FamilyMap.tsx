@@ -112,6 +112,8 @@ interface Props {
   showGeofences?: boolean;
   familyId?: string;
   liveSharingUserIds?: Set<string>;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export default function FamilyMap({
