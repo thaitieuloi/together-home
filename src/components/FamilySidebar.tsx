@@ -22,6 +22,7 @@ import {
   BatteryCharging,
   Gauge,
   WifiOff,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
@@ -136,6 +137,7 @@ interface Props {
   onMemberClick: (member: FamilyMemberWithProfile) => void;
   onSignOut: () => void;
   onOpenProfile?: () => void;
+  onOpenFamilyAdmin?: () => void;
   onShowTrip?: (member: FamilyMemberWithProfile) => void;
   recentlyUpdated?: Set<string>;
   liveSharingUserIds?: Set<string>;
@@ -148,6 +150,7 @@ export default function FamilySidebar({
   onMemberClick,
   onSignOut,
   onOpenProfile,
+  onOpenFamilyAdmin,
   onShowTrip,
   recentlyUpdated = new Set(),
   liveSharingUserIds = new Set(),
@@ -397,6 +400,16 @@ export default function FamilySidebar({
             {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
             {theme === 'dark' ? text.lightMode : text.darkMode}
           </Button>
+          {onOpenFamilyAdmin && isAdmin && (
+            <Button
+              variant="ghost"
+              onClick={onOpenFamilyAdmin}
+              className="w-full justify-start text-primary hover:text-primary hover:bg-primary/10 rounded-xl"
+              size="sm"
+            >
+              <ShieldCheck className="w-4 h-4 mr-2" /> {language === 'vi' ? 'Quản lý gia đình' : 'Family Admin'}
+            </Button>
+          )}
           {onOpenProfile && (
             <Button
               variant="ghost"

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFamily } from '@/hooks/useFamily';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,7 +31,9 @@ interface Props {
 }
 
 export default function GeofenceManager({ onClose, pendingLocation, onClearPending }: Props) {
-  const { family } = useFamily();
+  const { user } = useAuth();
+  const { family, members } = useFamily();
+  const isAdmin = members.find(m => m.user_id === user?.id)?.role === 'admin';
   const { toast } = useToast();
   const [geofences, setGeofences] = useState<Geofence[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -106,9 +109,11 @@ export default function GeofenceManager({ onClose, pendingLocation, onClearPendi
           <span className="font-semibold text-sm text-foreground">Vùng an toàn</span>
         </div>
         <div className="flex gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setShowAdd(true)}>
-            <Plus className="w-4 h-4" />
-          </Button>
+          {isAdmin && (
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setShowAdd(true)}>
+              <Plus className="w-4 h-4" />
+            </Button>
+          )}
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -134,9 +139,11 @@ export default function GeofenceManager({ onClose, pendingLocation, onClearPendi
                 Bán kính: {g.radius_meters}m
               </p>
             </div>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteGeofence(g.id)}>
-              <Trash2 className="w-3 h-3" />
-            </Button>
+            {isAdmin && (
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteGeofence(g.id)}>
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            )}
           </div>
         ))}
       </div>

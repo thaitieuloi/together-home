@@ -17,6 +17,7 @@ import MemberActionSheet from '@/components/MemberActionSheet';
 import Onboarding from '@/components/Onboarding';
 import FamilySetup from '@/pages/FamilySetup';
 import LiveLocationToggle from '@/components/LiveLocationToggle';
+import FamilyAdmin from '@/components/FamilyAdmin';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
@@ -72,12 +73,14 @@ export default function Dashboard() {
   const [showHistory, setShowHistory] = useState(false);
   const [showGeofences, setShowGeofences] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showFamilyAdmin, setShowFamilyAdmin] = useState(false);
   const [showGeofenceSettings, setShowGeofenceSettings] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [historyTrail, setHistoryTrail] = useState<Tables<'user_locations'>[]>([]);
   const [pendingGeofenceLocation, setPendingGeofenceLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [exitingProfile, setExitingProfile] = useState(false);
+  const [exitingFamilyAdmin, setExitingFamilyAdmin] = useState(false);
   const [exitingGeofence, setExitingGeofence] = useState(false);
   const [selectedMember, setSelectedMember] = useState<FamilyMemberWithProfile | null>(null);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
@@ -248,6 +251,10 @@ export default function Dashboard() {
     setExitingGeofence(true);
   };
 
+  const handleBackFromFamilyAdmin = () => {
+    setExitingFamilyAdmin(true);
+  };
+
   if (showProfile) {
     return (
       <PageTransition
@@ -282,6 +289,20 @@ export default function Dashboard() {
     );
   }
 
+  if (showFamilyAdmin) {
+    return (
+      <PageTransition
+        show={!exitingFamilyAdmin}
+        onExitComplete={() => {
+          setShowFamilyAdmin(false);
+          setExitingFamilyAdmin(false);
+        }}
+      >
+        <FamilyAdmin onBack={handleBackFromFamilyAdmin} />
+      </PageTransition>
+    );
+  }
+
   return (
     <>
     <div className="flex h-screen w-full overflow-hidden">
@@ -293,6 +314,7 @@ export default function Dashboard() {
           onMemberClick={handleMemberClick}
           onSignOut={signOut}
           onOpenProfile={() => setShowProfile(true)}
+          onOpenFamilyAdmin={() => setShowFamilyAdmin(true)}
           onShowTrip={handleShowTrip}
           recentlyUpdated={recentlyUpdated}
           liveSharingUserIds={liveSharingUserIds}
@@ -319,6 +341,10 @@ export default function Dashboard() {
               onSignOut={signOut}
               onOpenProfile={() => {
                 setShowProfile(true);
+                setMobileOpen(false);
+              }}
+              onOpenFamilyAdmin={() => {
+                setShowFamilyAdmin(true);
                 setMobileOpen(false);
               }}
               onShowTrip={handleShowTrip}
@@ -453,6 +479,7 @@ export default function Dashboard() {
         onNavigate={handleFlyToMember}
         onMessage={handleMessageMember}
         onViewHistory={handleShowMemberHistory}
+        onUpdate={refetch}
       />
 
       {/* Chat */}

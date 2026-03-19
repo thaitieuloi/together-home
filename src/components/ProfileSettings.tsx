@@ -14,7 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Save, Loader2, User, Bell, Languages, Camera, X } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, User, Bell, Languages, Camera, X, LogOut, ShieldAlert } from 'lucide-react';
+import { useFamily } from '@/hooks/useFamily';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -46,6 +57,10 @@ const TEXT = {
     uploadErrorDesc: 'Chỉ chấp nhận JPEG, PNG, WebP (tối đa 5MB)',
     uploadSuccess: 'Đã cập nhật ảnh đại diện!',
     removeAvatar: 'Xóa ảnh',
+    leaveFamily: 'Rời khỏi gia đình',
+    leaveFamilyDesc: 'Bạn sẽ không còn thấy vị trí của các thành viên khác.',
+    leaveConfirm: 'Xác nhận rời gia đình?',
+    leaveConfirmDesc: 'Hành động này không thể hoàn tác. Bạn sẽ cần mã mời mới để tham gia lại.',
   },
   en: {
     title: 'Profile Settings',
@@ -70,6 +85,10 @@ const TEXT = {
     uploadErrorDesc: 'Only JPEG, PNG, WebP accepted (max 5MB)',
     uploadSuccess: 'Avatar updated!',
     removeAvatar: 'Remove Photo',
+    leaveFamily: 'Leave Family',
+    leaveFamilyDesc: 'You will no longer see other members\' locations.',
+    leaveConfirm: 'Leave Family?',
+    leaveConfirmDesc: 'This action cannot be undone. You will need a new invite code to rejoin.',
   },
 };
 
@@ -85,6 +104,9 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const { family, refetch } = useFamily();
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -182,6 +204,25 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
     await supabase.from('profiles').update({ avatar_url: null }).eq('user_id', user.id);
     setAvatarUrl(null);
     setSaving(false);
+  };
+
+  const handleLeaveFamily = async () => {
+    if (!user || !family) return;
+    setLeaving(true);
+    const { error } = await supabase
+      .from('family_members')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('family_id', family.id);
+
+    if (error) {
+      toast({ title: t.error, description: error.message, variant: 'destructive' });
+      setLeaving(false);
+    } else {
+      // Sync legacy table if needed
+      await supabase.from('users' as any).update({ family_id: '' }).eq('id', user.id);
+      window.location.reload(); // Refresh to go back to FamilySetup
+    }
   };
 
   const handleLanguageChange = (value: string) => {
@@ -338,7 +379,45 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
             </CardContent>
           </Card>
         )}
+
+        {family && (
+          <div className="pt-6">
+            <h2 className="text-sm font-semibold text-destructive px-1 mb-3 flex items-center gap-2 uppercase tracking-wider">
+              <ShieldAlert className="w-4 h-4" />
+              {language === 'vi' ? 'Vùng nguy hiểm' : 'Danger Zone'}
+            </h2>
+            <Card className="border-destructive/20 bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors" onClick={() => setShowLeaveConfirm(true)}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <LogOut className="w-5 h-5 text-destructive" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-destructive">{t.leaveFamily}</p>
+                  <p className="text-xs text-muted-foreground">{t.leaveFamilyDesc}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
+
+      <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">{t.leaveConfirm}</AlertDialogTitle>
+            <AlertDialogDescription>{t.leaveConfirmDesc}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">{language === 'vi' ? 'Hủy' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90 rounded-xl"
+              onClick={handleLeaveFamily}
+              disabled={leaving}
+            >
+              {leaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {t.leaveFamily}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
