@@ -236,6 +236,17 @@ export default function Dashboard() {
     });
   };
 
+  const handleRefreshLocations = useCallback(async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setTimeout(() => setIsRefreshing(false), 500);
+  }, [refetch]);
+      const next = !prev;
+      if (next) setShowNotifications(false);
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
