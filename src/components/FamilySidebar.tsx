@@ -23,6 +23,7 @@ import {
   Gauge,
   WifiOff,
   ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
@@ -142,6 +143,7 @@ interface Props {
   recentlyUpdated?: Set<string>;
   liveSharingUserIds?: Set<string>;
   onMemberRemoved?: () => void;
+  activeSOSUserIds?: Set<string>;
 }
 
 export default function FamilySidebar({
@@ -155,6 +157,7 @@ export default function FamilySidebar({
   recentlyUpdated = new Set(),
   liveSharingUserIds = new Set(),
   onMemberRemoved,
+  activeSOSUserIds = new Set(),
 }: Props) {
   const { user } = useAuth();
   const { language } = useLanguage();
@@ -305,7 +308,12 @@ export default function FamilySidebar({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-foreground truncate">{m.profile.display_name}</p>
+                      <p className="text-sm font-medium text-foreground truncate flex items-center gap-1">
+                        {m.profile.display_name}
+                        {activeSOSUserIds.has(m.user_id) && (
+                          <AlertTriangle className="w-3.5 h-3.5 text-destructive animate-pulse shrink-0" />
+                        )}
+                      </p>
                       {liveSharingUserIds.has(m.user_id) && (
                         <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-primary/10 text-primary">
                           <Radio className="w-2.5 h-2.5 animate-pulse" />

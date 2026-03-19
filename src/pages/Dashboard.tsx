@@ -21,19 +21,21 @@ import FamilyAdmin from '@/components/FamilyAdmin';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-import { Menu, History, Shield, MessageCircle, Bell } from 'lucide-react';
+import { Menu, History, Shield, MessageCircle, Bell, Bug } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useLiveLocationSharing } from '@/hooks/useLiveLocationSharing';
 import NotificationPanel from '@/components/NotificationPanel';
+import DebugTrackingPanel from '@/components/DebugTrackingPanel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import PageTransition from '@/components/PageTransition';
 import AnimatedPanel from '@/components/AnimatedPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useActiveSOSAlerts } from '@/hooks/useActiveSOSAlerts';
 
 const DASHBOARD_TEXT = {
   vi: {
@@ -85,10 +87,13 @@ export default function Dashboard() {
   const [selectedMember, setSelectedMember] = useState<FamilyMemberWithProfile | null>(null);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('onboarding_done'));
+  const [showDebug, setShowDebug] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
+  const activeSOSUserIds = useActiveSOSAlerts();
 
   const {
     notifications,
@@ -231,6 +236,12 @@ export default function Dashboard() {
     });
   };
 
+  const handleRefreshLocations = useCallback(async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setTimeout(() => setIsRefreshing(false), 500);
+  }, [refetch]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -319,6 +330,7 @@ export default function Dashboard() {
           recentlyUpdated={recentlyUpdated}
           liveSharingUserIds={liveSharingUserIds}
           onMemberRemoved={refetch}
+          activeSOSUserIds={activeSOSUserIds}
         />
       </div>
 
@@ -351,6 +363,7 @@ export default function Dashboard() {
               recentlyUpdated={recentlyUpdated}
               liveSharingUserIds={liveSharingUserIds}
               onMemberRemoved={refetch}
+              activeSOSUserIds={activeSOSUserIds}
             />
           </SheetContent>
         </Sheet>
@@ -388,6 +401,14 @@ export default function Dashboard() {
           onClick={toggleGeofences}
         >
           <Shield className="w-5 h-5" />
+        </Button>
+        <Button
+          size="icon"
+          variant={showDebug ? 'default' : 'secondary'}
+          className={cn('shadow-lg rounded-full transition-all duration-200', !showDebug && 'glass glass-dark')}
+          onClick={() => setShowDebug((p) => !p)}
+        >
+          <Bug className="w-5 h-5" />
         </Button>
       </div>
 
@@ -509,6 +530,8 @@ export default function Dashboard() {
           showGeofences={showGeofences}
           familyId={family.id}
           liveSharingUserIds={liveSharingUserIds}
+          onRefresh={handleRefreshLocations}
+          isRefreshing={isRefreshing}
         />
 
         {showHistory && (
@@ -519,6 +542,11 @@ export default function Dashboard() {
           />
         )}
       </div>
+
+      {/* Debug Tracking Panel */}
+      <AnimatedPanel open={showDebug} onClose={() => setShowDebug(false)}>
+        {(handleClose) => <DebugTrackingPanel onClose={handleClose} />}
+      </AnimatedPanel>
     </div>
     {showOnboarding && (
       <Onboarding onDone={() => setShowOnboarding(false)} />
