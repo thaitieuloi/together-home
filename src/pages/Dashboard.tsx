@@ -530,6 +530,8 @@ export default function Dashboard() {
           showGeofences={showGeofences}
           familyId={family.id}
           liveSharingUserIds={liveSharingUserIds}
+          onRefresh={handleRefreshLocations}
+          isRefreshing={isRefreshing}
         />
 
         {showHistory && (
