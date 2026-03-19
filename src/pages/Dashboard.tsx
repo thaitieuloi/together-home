@@ -542,6 +542,11 @@ export default function Dashboard() {
           />
         )}
       </div>
+
+      {/* Debug Tracking Panel */}
+      <AnimatedPanel open={showDebug} onClose={() => setShowDebug(false)}>
+        {(handleClose) => <DebugTrackingPanel onClose={handleClose} />}
+      </AnimatedPanel>
     </div>
     {showOnboarding && (
       <Onboarding onDone={() => setShowOnboarding(false)} />
