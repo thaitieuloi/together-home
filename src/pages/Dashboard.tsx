@@ -87,6 +87,8 @@ export default function Dashboard() {
   const [selectedMember, setSelectedMember] = useState<FamilyMemberWithProfile | null>(null);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('onboarding_done'));
+  const [showDebug, setShowDebug] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useLocationTracking();
   usePushNotifications();
