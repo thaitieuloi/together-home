@@ -125,6 +125,8 @@ export default function FamilyMap({
   showGeofences,
   familyId,
   liveSharingUserIds = new Set(),
+  onRefresh,
+  isRefreshing,
 }: Props) {
   const { language } = useLanguage();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
