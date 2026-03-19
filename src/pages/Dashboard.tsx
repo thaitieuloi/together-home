@@ -241,11 +241,6 @@ export default function Dashboard() {
     await refetch();
     setTimeout(() => setIsRefreshing(false), 500);
   }, [refetch]);
-      const next = !prev;
-      if (next) setShowNotifications(false);
-      return next;
-    });
-  };
 
   if (loading) {
     return (
