@@ -330,6 +330,7 @@ export default function Dashboard() {
           recentlyUpdated={recentlyUpdated}
           liveSharingUserIds={liveSharingUserIds}
           onMemberRemoved={refetch}
+          activeSOSUserIds={activeSOSUserIds}
         />
       </div>
 
