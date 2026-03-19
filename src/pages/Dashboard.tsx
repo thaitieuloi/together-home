@@ -28,12 +28,14 @@ import { useSOSAlerts } from '@/hooks/useSOSAlerts';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useLiveLocationSharing } from '@/hooks/useLiveLocationSharing';
 import NotificationPanel from '@/components/NotificationPanel';
+import DebugTrackingPanel from '@/components/DebugTrackingPanel';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import PageTransition from '@/components/PageTransition';
 import AnimatedPanel from '@/components/AnimatedPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useActiveSOSAlerts } from '@/hooks/useActiveSOSAlerts';
 
 const DASHBOARD_TEXT = {
   vi: {
