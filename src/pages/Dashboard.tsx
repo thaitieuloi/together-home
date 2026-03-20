@@ -218,19 +218,13 @@ export default function Dashboard() {
       }
     };
 
+    // Mark as online when first entering the dashboard
     updateStatus('online');
 
     const handleFocus = () => updateStatus('online');
     const handleBlur = () => updateStatus('idle');
     const handleUnload = () => {
-      // Use navigator.sendBeacon for more reliable delivery on close
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?user_id=eq.${user.id}`;
-      const headers = {
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${user.id}`, // This might not work with RLS if it expects a real JWT, but let's try the standard update first
-        'Content-Type': 'application/json'
-      };
-      updateStatus('offline');
+      // Keep it simple for now, maybe set to offline if you are sure
     };
 
     window.addEventListener('focus', handleFocus);
@@ -238,7 +232,7 @@ export default function Dashboard() {
     window.addEventListener('beforeunload', handleUnload);
 
     return () => {
-      updateStatus('offline');
+      updateStatus('idle');
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('beforeunload', handleUnload);

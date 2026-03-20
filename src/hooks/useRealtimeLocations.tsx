@@ -30,34 +30,45 @@ export function useRealtimeLocations(
           table: 'latest_locations',
         },
         (payload) => {
-          const record = payload.new as {
-            user_id: string;
-            latitude: number;
-            longitude: number;
-            accuracy: number | null;
-            updated_at: string;
-            speed?: number | null;
-            is_moving?: boolean | null;
-            battery_level?: number | null;
-          };
-          if (record && memberIds.has(record.user_id)) {
-            onLocationUpdate(
-              record.user_id,
-              record.latitude,
-              record.longitude,
-              record.accuracy,
-              record.updated_at,
-              record.speed ?? null,
-              record.is_moving ?? null,
-              record.battery_level ?? null
-            );
+          try {
+            const record = payload.new as {
+              user_id: string;
+              latitude: number;
+              longitude: number;
+              accuracy: number | null;
+              updated_at: string;
+              speed?: number | null;
+              is_moving?: boolean | null;
+              battery_level?: number | null;
+            };
+            
+            if (record && record.user_id && memberIds.has(record.user_id)) {
+              onLocationUpdate(
+                record.user_id,
+                record.latitude,
+                record.longitude,
+                record.accuracy,
+                record.updated_at,
+                record.speed ?? null,
+                record.is_moving ?? null,
+                record.battery_level ?? null
+              );
+            }
+          } catch (err) {
+            console.error('Realtime location update error:', err);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('📡 [Realtime] Subscribed to location updates');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ [Realtime] Location updates channel error');
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [members.length, onLocationUpdate]);
+  }, [members, onLocationUpdate]);
 }

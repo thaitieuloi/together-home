@@ -45,14 +45,22 @@ const TILE_BY_LANGUAGE = {
   },
 };
 
-function getFreshnessColor(timestamp: string, language: 'vi' | 'en'): { dot: string; label: string } {
+function getFreshnessColor(status: 'online' | 'idle' | 'offline', timestamp: string, language: 'vi' | 'en'): { dot: string; label: string; isOffline: boolean } {
   const diffMs = Math.max(0, Date.now() - new Date(timestamp).getTime());
   const diffMin = diffMs / 60000;
   const text = MAP_TEXT[language];
 
-  if (diffMin < 10) return { dot: '#22c55e', label: text.online };
-  if (diffMin < 60) return { dot: '#f59e0b', label: text.recent };
-  return { dot: '#94a3b8', label: text.offline };
+  // Prioritize heartbeat status
+  if (status === 'online') return { dot: '#22c55e', label: text.online, isOffline: false };
+  if (status === 'idle') return { dot: '#f59e0b', label: text.recent, isOffline: false };
+
+  // Fallback to location freshness if status is not explicitly offline
+  if (status !== 'offline') {
+    if (diffMin < 10) return { dot: '#22c55e', label: text.online, isOffline: false };
+    if (diffMin < 60) return { dot: '#f59e0b', label: text.recent, isOffline: false };
+  }
+  
+  return { dot: '#94a3b8', label: text.offline, isOffline: true };
 }
 
 function createCustomIcon(
@@ -352,8 +360,8 @@ export default function FamilyMap({
     membersWithLocation.forEach((m, i) => {
       const loc = m.location!;
       const latlng: [number, number] = [loc.latitude, loc.longitude];
-      const freshness = getFreshnessColor(loc.timestamp, language);
-      const isOffline = (Date.now() - new Date(loc.timestamp).getTime()) / 60000 > 60;
+      const freshness = getFreshnessColor(m.profile.status, loc.timestamp, language);
+      const isOffline = freshness.isOffline;
       const icon = createCustomIcon(
         getInitials(m.profile.display_name),
         COLORS[i % COLORS.length],

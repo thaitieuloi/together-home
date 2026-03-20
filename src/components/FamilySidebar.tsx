@@ -96,18 +96,21 @@ function getStatusInfo(status: 'online' | 'idle' | 'offline', timestamp: string 
   const diffMs = timestamp ? Math.max(0, Date.now() - new Date(timestamp).getTime()) : Infinity;
   const diffMin = diffMs / 60000;
 
-  // Final status is a mix of explicit heartbeat 'status' and location timestamp freshness
-  if (status === 'online' && diffMin < 15) {
+  // We prioritize the explicit heartbeat status from the 'profiles' table.
+  // Location freshness (diffMin) is a secondary signal.
+  
+  if (status === 'online') {
     return {
       color: 'bg-emerald-500',
       label: text.online,
       ring: 'ring-emerald-500/30',
       textClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
       isOffline: false,
+      staleLocation: diffMin > 15 && timestamp !== undefined // Location is old but user is online
     };
   }
 
-  if (status === 'idle' || (diffMin >= 15 && diffMin < 60)) {
+  if (status === 'idle' || (status !== 'offline' && diffMin >= 15 && diffMin < 60)) {
     return {
       color: 'bg-amber-500',
       label: text.recent,

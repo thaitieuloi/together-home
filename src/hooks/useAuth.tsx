@@ -51,8 +51,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    
+    // Proactively set status to online
+    if (data.user) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ status: 'online' } as any)
+          .eq('user_id', data.user.id);
+      } catch (err) {
+        console.error('Login status update failed:', err);
+      }
+    }
   };
 
   const signOut = async () => {
