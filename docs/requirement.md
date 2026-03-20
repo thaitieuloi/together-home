@@ -28,9 +28,18 @@ Dưới đây là các điểm lưu ý về trải nghiệm người dùng đã 
 *   **Web (Fixed)**: Nhãn SOS hiển thị to, màu đỏ, nhấp nháy (pulse), căn lề phải rõ ràng. Marker trên bản đồ có vòng tròn đỏ bao quanh.
 *   **Mobile (Suggestion)**: Nút SOS nên đổi sang dạng Floating Action Button (FAB) nổi bật hơn hoặc có hiệu ứng khi người dùng mở app trong lúc có SOS active.
 
-### 2. Đồng bộ trạng thái (Online/Offline)
-*   **Lỗi đã fix**: Trước đó khi Logout trên Android, Web vẫn báo "Gần đây" (Idle).
-*   **Giải pháp**: Đã bổ sung bước cập nhật `offline` thủ công ngay trước khi gọi hàm `signOut()` của Supabase trên cả app và web.
+### 2. Định nghĩa & Đồng bộ trạng thái (User Status)
+
+Hệ thống đã chuẩn hóa 3 trạng thái hoạt động chính, đồng bộ thời gian thực giữa Web và Mobile:
+*   **Online (🟢 Xanh)**: Người dùng đã đăng nhập và **đang mở ứng dụng** (tiền cảnh - Foreground).
+*   **Idle / Gần đây (🟡 Vàng)**: Người dùng ẩn ứng dụng (Background), chuyển sang app khác, hoặc đóng hẳn ứng dụng nhưng **vẫn đang chạy ngầm** để gửi vị trí.
+*   **Offline (🔘 Xám)**: Chỉ hiển thị khi người dùng chủ động nhấn nút **Đăng xuất (Logout)** khỏi tài khoản.
+
+**Các cải tiến & Fix mới nhất (2026-03-20):**
+- **Sửa lỗi "Offline sau Login"**: Khắc phục tình trạng người dùng đăng nhập lại nhưng vẫn bị báo Offline do trễ đồng bộ. Đã bổ sung bước cập nhật trạng thái `online` chủ động ngay khi `signIn` thành công.
+- **Sửa lỗi "Mất Idle"**: Khắc phục việc lệnh gửi vị trí ngầm vô tình đè lên trạng thái `Idle` khiến app luôn báo `Online`. Giờ đây trạng thái phụ thuộc hoàn toàn vào vòng đời ứng dụng (App Lifecycle).
+- **Ổn định Realtime**: Web App đã được tối ưu để giữ một kết nối Realtime duy nhất, tránh việc nạp lại kênh liên tục gây mất dữ liệu trạng thái của thành viên.
+- **Database Logic**: Bổ sung Foreign Key giữa `profiles` và `users` để tối ưu tốc độ truy vấn `JOIN` và độ ổn định của dữ liệu trên Mobile.
 
 ### 3. Hiển thị Lịch sử phát lại (Playback)
 *   **Web (Feature)**: Hỗ trợ thanh kéo (Slider) để xem vị trí tại một thời điểm bất kỳ, hiển thị tốc độ di chuyển tại điểm đó.
