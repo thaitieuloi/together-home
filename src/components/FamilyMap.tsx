@@ -46,13 +46,13 @@ const TILE_BY_LANGUAGE = {
 };
 
 function getFreshnessColor(timestamp: string, language: 'vi' | 'en'): { dot: string; label: string } {
-  const diffMs = Date.now() - new Date(timestamp).getTime();
+  const diffMs = Math.max(0, Date.now() - new Date(timestamp).getTime());
   const diffMin = diffMs / 60000;
   const text = MAP_TEXT[language];
 
-  if (diffMin < 5) return { dot: '#22c55e', label: text.online };
-  if (diffMin < 30) return { dot: '#f59e0b', label: text.recent };
-  return { dot: '#ef4444', label: text.offline };
+  if (diffMin < 10) return { dot: '#22c55e', label: text.online };
+  if (diffMin < 60) return { dot: '#f59e0b', label: text.recent };
+  return { dot: '#94a3b8', label: text.offline };
 }
 
 function createCustomIcon(
@@ -114,6 +114,7 @@ interface Props {
   liveSharingUserIds?: Set<string>;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  playbackPoint?: Tables<'user_locations'> | null;
 }
 
 export default function FamilyMap({
@@ -127,6 +128,7 @@ export default function FamilyMap({
   liveSharingUserIds = new Set(),
   onRefresh,
   isRefreshing,
+  playbackPoint,
 }: Props) {
   const { language } = useLanguage();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +140,8 @@ export default function FamilyMap({
   const historyLayerRef = useRef<L.LayerGroup | null>(null);
   const geofenceLayerRef = useRef<L.LayerGroup | null>(null);
   const markerLayerRef = useRef<L.LayerGroup | null>(null);
+  const playbackLayerRef = useRef<L.LayerGroup | null>(null);
+  const playbackMarkerRef = useRef<L.Marker | null>(null);
   const hasFittedBoundsRef = useRef(false);
   const animationFramesRef = useRef<Map<string, number>>(new Map());
 
@@ -173,6 +177,7 @@ export default function FamilyMap({
     markerLayerRef.current = L.layerGroup().addTo(map);
     historyLayerRef.current = L.layerGroup().addTo(map);
     geofenceLayerRef.current = L.layerGroup().addTo(map);
+    playbackLayerRef.current = L.layerGroup().addTo(map);
 
     // Inject pulse animation CSS
     const style = document.createElement('style');
@@ -199,6 +204,8 @@ export default function FamilyMap({
       markerLayerRef.current = null;
       historyLayerRef.current = null;
       geofenceLayerRef.current = null;
+      playbackLayerRef.current = null;
+      playbackMarkerRef.current = null;
       markersRef.current.clear();
       accuracyCirclesRef.current.clear();
       liveCirclesRef.current.clear();
@@ -346,7 +353,7 @@ export default function FamilyMap({
       const loc = m.location!;
       const latlng: [number, number] = [loc.latitude, loc.longitude];
       const freshness = getFreshnessColor(loc.timestamp, language);
-      const isOffline = (Date.now() - new Date(loc.timestamp).getTime()) / 60000 > 30;
+      const isOffline = (Date.now() - new Date(loc.timestamp).getTime()) / 60000 > 60;
       const icon = createCustomIcon(
         getInitials(m.profile.display_name),
         COLORS[i % COLORS.length],
@@ -516,6 +523,15 @@ export default function FamilyMap({
         [[curr.latitude, curr.longitude], [next.latitude, next.longitude]],
         { color: segColor, weight: 4, opacity: 0.8 }
       ).addTo(historyLayerRef.current!);
+
+      // Add a small dot for each point to make it more interactive/visible
+      L.circleMarker([curr.latitude, curr.longitude], {
+        radius: 3,
+        color: segColor,
+        fillColor: 'white',
+        fillOpacity: 1,
+        weight: 1,
+      }).addTo(historyLayerRef.current!);
     }
 
     const polyline = L.polyline(latlngs, { color: 'transparent', weight: 0, opacity: 0 });
@@ -543,6 +559,52 @@ export default function FamilyMap({
 
     mapRef.current.fitBounds(polyline.getBounds(), { padding: [50, 50] });
   }, [historyTrail, mapText.started, mapText.ended, language]);
+
+  // Handle Playback Marker
+  useEffect(() => {
+    if (!mapRef.current || !playbackLayerRef.current) return;
+
+    if (!playbackPoint) {
+      if (playbackMarkerRef.current) {
+        playbackLayerRef.current.removeLayer(playbackMarkerRef.current);
+        playbackMarkerRef.current = null;
+      }
+      return;
+    }
+
+    const latlng: [number, number] = [playbackPoint.latitude, playbackPoint.longitude];
+    const speedKmh = (playbackPoint as any).speed ? (playbackPoint as any).speed * 3.6 : 0;
+    
+    // Create or update playback marker
+    const icon = L.divIcon({
+      className: 'playback-marker',
+      html: `
+        <div style="
+          width: 32px; height: 32px; 
+          background: #3b82f6; border: 3px solid white; 
+          border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.3);
+          display: flex; align-items: center; justify-content: center;
+          color: white; transform: rotate(0deg); transition: transform 0.2s;
+        ">
+          ${speedKmh > 20 ? '🚗' : '🚶'}
+        </div>
+      `,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+    });
+
+    if (playbackMarkerRef.current) {
+      playbackMarkerRef.current.setLatLng(latlng);
+      playbackMarkerRef.current.setIcon(icon);
+    } else {
+      playbackMarkerRef.current = L.marker(latlng, { icon, zIndexOffset: 2000 }).addTo(playbackLayerRef.current);
+    }
+
+    // Auto-center during playback if not too zoomed out
+    if (mapRef.current.getZoom() > 12) {
+      mapRef.current.panTo(latlng, { animate: true, duration: 0.5 });
+    }
+  }, [playbackPoint]);
 
   return (
     <div className="relative w-full h-full">

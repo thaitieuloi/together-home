@@ -1,8 +1,9 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFamily } from '@/hooks/useFamily';
 import { useLocationTracking } from '@/hooks/useLocationTracking';
 import { useRealtimeLocations } from '@/hooks/useRealtimeLocations';
+import { useRealtimeProfiles } from '@/hooks/useRealtimeProfiles';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -63,10 +64,10 @@ const DASHBOARD_TEXT = {
 };
 
 export default function Dashboard() {
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { language } = useLanguage();
   const text = DASHBOARD_TEXT[language];
-  const { family, members, loading, refetch, updateMemberLocation } = useFamily();
+  const { family, members, loading, updateMemberLocation, updateMemberProfile, refetch } = useFamily();
   const { toast } = useToast();
 
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
@@ -89,6 +90,8 @@ export default function Dashboard() {
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('onboarding_done'));
   const [showDebug, setShowDebug] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [playbackPoint, setPlaybackPoint] = useState<Tables<'user_locations'> | null>(null);
+  const [selectedMemberForHistoryId, setSelectedMemberForHistoryId] = useState<string | undefined>(undefined);
 
   useLocationTracking();
   usePushNotifications();
@@ -131,6 +134,8 @@ export default function Dashboard() {
   );
 
   useRealtimeLocations(members, handleRealtimeLocation);
+  useRealtimeProfiles(members, updateMemberProfile);
+
   const { unreadCount } = useUnreadMessages(family?.id, showChat);
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
@@ -151,6 +156,7 @@ export default function Dashboard() {
   };
 
   const handleShowMemberHistory = (member: FamilyMemberWithProfile) => {
+    setSelectedMemberForHistoryId(member.user_id);
     setShowHistory(true);
     setShowMemberSheet(false);
     if (member.location) {
@@ -171,6 +177,7 @@ export default function Dashboard() {
 
       if (data && data.length > 0) {
         setHistoryTrail(data);
+        setSelectedMemberForHistoryId(member.user_id);
         setShowHistory(true);
 
         if (member.location) {
@@ -192,7 +199,51 @@ export default function Dashboard() {
   const handleCloseHistory = () => {
     setShowHistory(false);
     setHistoryTrail([]);
+    setPlaybackPoint(null);
+    setSelectedMemberForHistoryId(undefined);
   };
+
+  // Status tracking (Online/Idle/Offline)
+  useEffect(() => {
+    if (!user) return;
+
+    const updateStatus = async (status: 'online' | 'idle' | 'offline') => {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ status } as any)
+          .eq('user_id', user.id);
+      } catch (err) {
+        console.error('Failed to update status:', err);
+      }
+    };
+
+    updateStatus('online');
+
+    const handleFocus = () => updateStatus('online');
+    const handleBlur = () => updateStatus('idle');
+    const handleUnload = () => {
+      // Use navigator.sendBeacon for more reliable delivery on close
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?user_id=eq.${user.id}`;
+      const headers = {
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${user.id}`, // This might not work with RLS if it expects a real JWT, but let's try the standard update first
+        'Content-Type': 'application/json'
+      };
+      updateStatus('offline');
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      updateStatus('offline');
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [user]);
 
   const handleMapClick = (lat: number, lng: number) => {
     if (showGeofences) {
@@ -501,6 +552,8 @@ export default function Dashboard() {
         onMessage={handleMessageMember}
         onViewHistory={handleShowMemberHistory}
         onUpdate={refetch}
+        isAdmin={members.find((m) => m.user_id === user?.id)?.role === 'admin'}
+        isSOS={selectedMember ? activeSOSUserIds.has(selectedMember.user_id) : false}
       />
 
       {/* Chat */}
@@ -525,6 +578,7 @@ export default function Dashboard() {
           members={members}
           flyTo={flyTo}
           historyTrail={historyTrail}
+          playbackPoint={playbackPoint}
           onMapClick={handleMapClick}
           onMemberClick={handleMemberClick}
           showGeofences={showGeofences}
@@ -537,7 +591,9 @@ export default function Dashboard() {
         {showHistory && (
           <LocationHistory
             members={members}
+            initialMemberId={selectedMemberForHistoryId}
             onHistoryLoaded={(trail, _mode) => setHistoryTrail(trail)}
+            onPlaybackChange={setPlaybackPoint}
             onClose={handleCloseHistory}
           />
         )}

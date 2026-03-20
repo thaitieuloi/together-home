@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { Tables } from '@/integrations/supabase/types';
@@ -6,7 +6,12 @@ import { Tables } from '@/integrations/supabase/types';
 export interface FamilyMemberWithProfile {
   user_id: string;
   role: string;
-  profile: Tables<'profiles'>;
+  profile: {
+    user_id: string;
+    display_name: string;
+    avatar_url: string | null;
+    status: 'online' | 'idle' | 'offline';
+  };
   location?: {
     latitude: number;
     longitude: number;
@@ -86,11 +91,12 @@ export function useFamily() {
       // Use profile if exists, otherwise fallback to legacy users table
       if (!profile && !legacyUser) continue;
 
-      const finalizedProfile = profile || {
+      const finalizedProfile = {
         user_id: m.user_id,
-        display_name: legacyUser?.name || 'Unknown',
-        avatar_url: legacyUser?.photo_url || null,
-        created_at: legacyUser?.created_at || new Date().toISOString(),
+        display_name: profile?.display_name || legacyUser?.name || 'Unknown',
+        avatar_url: profile?.avatar_url || legacyUser?.photo_url || null,
+        status: (profile as any)?.status || 'offline',
+        created_at: profile?.created_at || legacyUser?.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
@@ -141,6 +147,22 @@ export function useFamily() {
                   is_moving: isMoving ?? null,
                   battery_level: batteryLevel ?? null,
                 },
+              }
+            : m
+        )
+      );
+    },
+    []
+  );
+
+  const updateMemberProfile = useCallback(
+    (userId: string, updates: Partial<FamilyMemberWithProfile['profile']>) => {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === userId
+            ? {
+                ...m,
+                profile: { ...m.profile, ...updates },
               }
             : m
         )
@@ -211,5 +233,5 @@ export function useFamily() {
     fetchFamily();
   }, [fetchFamily]);
 
-  return { family, members, loading, createFamily, joinFamily, refetch: fetchFamily, updateMemberLocation };
+  return { family, members, loading, createFamily, joinFamily, refetch: fetchFamily, updateMemberLocation, updateMemberProfile };
 }

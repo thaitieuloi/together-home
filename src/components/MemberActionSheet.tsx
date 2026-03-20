@@ -45,6 +45,8 @@ interface Props {
   onMessage?: (member: FamilyMemberWithProfile) => void;
   onViewHistory?: (member: FamilyMemberWithProfile) => void;
   onUpdate?: () => void;
+  isAdmin?: boolean;
+  isSOS?: boolean;
 }
 
 const TEXT = {
@@ -118,7 +120,7 @@ function getTravelMode(speedKmh: number | null, isMoving: boolean | null, t: typ
   return t.walking;
 }
 
-export default function MemberActionSheet({ member, open, onClose, onNavigate, onMessage, onViewHistory, onUpdate }: Props) {
+export default function MemberActionSheet({ member, open, onClose, onNavigate, onMessage, onViewHistory, onUpdate, isAdmin, isSOS }: Props) {
   const { user } = useAuth();
   const { language } = useLanguage();
   const t = TEXT[language];
@@ -129,37 +131,37 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
 
   if (!member || !user) return null;
 
-  const isAdmin = member.role === 'admin';
-  const currentUserRole = member.user_id === user.id ? member.role : 'member'; 
-  // Note: we need to know if the CURRENT logger user is admin, but this sheet only has target member.
-  // Actually, we can't be sure about current user role from Props unless we pass it.
-  // But we can check it using useAuth + useFamily in the component if needed, 
-  // or just use the member objects we already have in Dashboard.
-
   const loc = member.location;
   const batteryInfo = loc ? getBatteryInfo(loc.battery_level) : null;
   const speedKmh = loc?.speed ? loc.speed * 3.6 : null;
   const travelMode = loc ? getTravelMode(speedKmh, loc.is_moving, t) : null;
 
-  const isOffline = loc
-    ? (Date.now() - new Date(loc.timestamp).getTime()) / 60000 > 30
-    : true;
+  const status = member.profile.status;
+  const diffMin = loc
+    ? Math.max(0, (Date.now() - new Date(loc.timestamp).getTime()) / 60000)
+    : Infinity;
 
-  const freshnessLabel = loc
-    ? isOffline
-      ? t.offline
-      : (Date.now() - new Date(loc.timestamp).getTime()) / 60000 < 5
-      ? t.online
-      : t.recent
-    : t.noLocation;
+  const isActuallyOnline = status === 'online' && diffMin < 15;
+  const isActuallyIdle = status === 'idle' || (diffMin >= 15 && diffMin < 60);
+  const isActuallyOffline = !isActuallyOnline && !isActuallyIdle;
 
-  const freshnessColor = !loc
-    ? 'bg-gray-400'
-    : isOffline
-    ? 'bg-red-500'
-    : (Date.now() - new Date(loc.timestamp).getTime()) / 60000 < 5
+  const freshnessLabel = isActuallyOnline
+    ? t.online
+    : isActuallyIdle
+    ? t.recent
+    : t.offline;
+
+  const freshnessColor = isActuallyOnline
     ? 'bg-emerald-500'
-    : 'bg-amber-500';
+    : isActuallyIdle
+    ? 'bg-amber-500'
+    : 'bg-slate-400';
+
+  const freshnessTextClass = isActuallyOnline
+    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+    : isActuallyIdle
+    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+    : 'bg-slate-500/10 text-slate-500 dark:text-slate-400';
 
   const handleNavigate = () => {
     if (!loc) return;
@@ -221,7 +223,7 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
         <SheetHeader className="mb-4">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Avatar className={cn('w-14 h-14', isOffline && 'opacity-60')}>
+              <Avatar className={cn('w-14 h-14', isActuallyOffline && 'opacity-60', isSOS && 'ring-2 ring-destructive ring-offset-2 animate-pulse')}>
                 {member.profile.avatar_url ? (
                   <AvatarImage src={member.profile.avatar_url} alt={member.profile.display_name} />
                 ) : null}
@@ -236,23 +238,24 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
                 )}
               />
             </div>
-            <div className="flex-1">
-              <SheetTitle className="text-left text-lg leading-tight">
-                {member.profile.display_name}
-              </SheetTitle>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <SheetTitle className="text-left text-lg leading-tight truncate mr-2">
+                  {member.profile.display_name}
+                </SheetTitle>
+                {isSOS && (
+                  <Badge variant="destructive" className="animate-pulse uppercase font-bold shrink-0">SOS</Badge>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <Badge
                   variant="secondary"
                   className={cn(
                     'text-xs',
-                    isOffline
-                      ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                      : (Date.now() - new Date(loc?.timestamp ?? 0).getTime()) / 60000 < 5
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    freshnessTextClass
                   )}
                 >
-                  {isOffline ? <WifiOff className="w-3 h-3 mr-1" /> : null}
+                  {isActuallyOffline ? <WifiOff className="w-3 h-3 mr-1" /> : null}
                   {freshnessLabel}
                 </Badge>
                 {travelMode && (
@@ -330,8 +333,8 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
             {t.history}
           </Button>
 
-          {/* Admin actions (simplified view) */}
-          {member.user_id !== user.id && (
+          {/* Admin actions */}
+          {isAdmin && member.user_id !== user.id && (
             <div className="pt-4 mt-2 border-t border-border/50">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3 px-1">{t.adminActions}</p>
               <div className="grid grid-cols-2 gap-2">

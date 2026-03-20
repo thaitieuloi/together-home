@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
@@ -15,6 +15,8 @@ interface Props {
   members: FamilyMemberWithProfile[];
   onHistoryLoaded: (trail: Tables<'user_locations'>[], mode: 'map' | 'list') => void;
   onClose: () => void;
+  onPlaybackChange?: (point: Tables<'user_locations'> | null) => void;
+  initialMemberId?: string;
 }
 
 const TIME_RANGES = {
@@ -62,6 +64,9 @@ const TEXT = {
     walking: '🚶 Walking',
     driving: '🚗 Driving',
     stationary: '📍 Stop',
+    play: 'Play',
+    pause: 'Pause',
+    speedup: 'Speed up',
   },
 };
 
@@ -85,18 +90,89 @@ function getLocationSpeed(location: Tables<'user_locations'>): number | null {
   return (location as { speed?: number | null }).speed ?? null;
 }
 
-export default function LocationHistory({ members, onHistoryLoaded, onClose }: Props) {
+export default function LocationHistory({ members, onHistoryLoaded, onClose, onPlaybackChange, initialMemberId }: Props) {
   const { language } = useLanguage();
   const t = TEXT[language];
   const ranges = TIME_RANGES[language];
   const dateLocale = language === 'vi' ? viLocale : enUS;
 
-  const [selectedMember, setSelectedMember] = useState('');
+  const [selectedMember, setSelectedMember] = useState(initialMemberId || '');
   const [selectedRange, setSelectedRange] = useState('3h');
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [trail, setTrail] = useState<Tables<'user_locations'>[]>([]);
   const [showList, setShowList] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackIndex, setPlaybackIndex] = useState(-1);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1); // 1x, 2x, 4x
+  const [playbackTimer, setPlaybackTimer] = useState<number | null>(null);
+
+  const togglePlayback = () => {
+    if (isPlaying) {
+      if (playbackTimer) window.clearInterval(playbackTimer);
+      setPlaybackTimer(null);
+      setIsPlaying(false);
+    } else {
+      if (playbackIndex >= trail.length - 1 || playbackIndex === -1) {
+        // Start from oldest point (end of array because it's descending)
+        setPlaybackIndex(trail.length - 1);
+      }
+      setIsPlaying(true);
+      const timer = window.setInterval(() => {
+        setPlaybackIndex((prev) => {
+          if (prev <= 0) {
+            window.clearInterval(timer);
+            setIsPlaying(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 500 / playbackSpeed);
+      setPlaybackTimer(timer);
+    }
+  };
+
+  const handleSeek = (index: number) => {
+    setPlaybackIndex(index);
+    if (onPlaybackChange && trail[index]) {
+      onPlaybackChange(trail[index]);
+    }
+  };
+
+  const nextPlaybackSpeed = () => {
+    const speeds = [1, 2, 4, 8];
+    const currentIndex = speeds.indexOf(playbackSpeed);
+    const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
+    setPlaybackSpeed(nextSpeed);
+    
+    // Resume timer with new speed if playing
+    if (isPlaying && playbackTimer) {
+      window.clearInterval(playbackTimer);
+      const timer = window.setInterval(() => {
+        setPlaybackIndex((prev) => {
+          if (prev <= 0) {
+            window.clearInterval(timer);
+            setIsPlaying(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 500 / nextSpeed);
+      setPlaybackTimer(timer);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (playbackTimer) window.clearInterval(playbackTimer);
+    };
+  }, [playbackTimer]);
+
+  useEffect(() => {
+    if (playbackIndex !== -1 && onPlaybackChange && trail[playbackIndex]) {
+      onPlaybackChange(trail[playbackIndex]);
+    }
+  }, [playbackIndex, onPlaybackChange, trail]);
 
   const loadHistory = async () => {
     if (!selectedMember) return;
@@ -131,6 +207,18 @@ export default function LocationHistory({ members, onHistoryLoaded, onClose }: P
       else setShowList(false);
     }
   };
+
+  useEffect(() => {
+    if (initialMemberId && members.some(m => m.user_id === initialMemberId)) {
+      setSelectedMember(initialMemberId);
+    }
+  }, [initialMemberId, members]);
+
+  useEffect(() => {
+    if (selectedMember && trail.length === 0 && !loading) {
+      loadHistory();
+    }
+  }, [selectedMember, trail.length, loading]);
 
   return (
     <>
@@ -198,6 +286,50 @@ export default function LocationHistory({ members, onHistoryLoaded, onClose }: P
         <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose}>
           <X className="w-4 h-4" />
         </Button>
+
+        {trail.length > 0 && (
+          <div className="w-full mt-2 pt-2 border-t border-border flex items-center gap-3">
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 rounded-full"
+              onClick={togglePlayback}
+            >
+              {isPlaying ? (
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              ) : (
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              )}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[10px] font-bold"
+              onClick={nextPlaybackSpeed}
+            >
+              {playbackSpeed}x
+            </Button>
+
+            <div className="flex-1 relative h-6 flex items-center group">
+              <input
+                type="range"
+                min="0"
+                max={trail.length - 1}
+                value={playbackIndex === -1 ? trail.length - 1 : playbackIndex}
+                onChange={(e) => handleSeek(parseInt(e.target.value))}
+                className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                dir="rtl" // Because trail is descending in time
+              />
+            </div>
+
+            {playbackIndex !== -1 && trail[playbackIndex] && (
+              <div className="text-[10px] text-muted-foreground font-mono min-w-[35px]">
+                {format(new Date(trail[playbackIndex].timestamp), 'HH:mm', { locale: dateLocale })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* List view panel */}
@@ -218,7 +350,14 @@ export default function LocationHistory({ members, onHistoryLoaded, onClose }: P
                 const speedColor = getSpeedColor(speedMs);
                 const travelLabel = getTravelMode(speedMs, t);
                 return (
-                  <div key={loc.id ?? i} className="flex items-start gap-2 p-2">
+                  <div 
+                    key={loc.id ?? i} 
+                    className={cn(
+                      "flex items-start gap-2 p-2 cursor-pointer hover:bg-accent/50 transition-colors",
+                      playbackIndex === i && "bg-primary/10 border-l-2 border-primary"
+                    )}
+                    onClick={() => handleSeek(i)}
+                  >
                     <div
                       className="w-2 h-2 rounded-full mt-1.5 shrink-0"
                       style={{ backgroundColor: speedColor }}

@@ -91,12 +91,13 @@ const SIDEBAR_TEXT = {
   },
 };
 
-function getFreshnessInfo(timestamp: string, language: 'vi' | 'en') {
-  const diffMs = Date.now() - new Date(timestamp).getTime();
-  const diffMin = diffMs / 60000;
+function getStatusInfo(status: 'online' | 'idle' | 'offline', timestamp: string | undefined, language: 'vi' | 'en') {
   const text = SIDEBAR_TEXT[language];
+  const diffMs = timestamp ? Math.max(0, Date.now() - new Date(timestamp).getTime()) : Infinity;
+  const diffMin = diffMs / 60000;
 
-  if (diffMin < 5) {
+  // Final status is a mix of explicit heartbeat 'status' and location timestamp freshness
+  if (status === 'online' && diffMin < 15) {
     return {
       color: 'bg-emerald-500',
       label: text.online,
@@ -106,7 +107,7 @@ function getFreshnessInfo(timestamp: string, language: 'vi' | 'en') {
     };
   }
 
-  if (diffMin < 30) {
+  if (status === 'idle' || (diffMin >= 15 && diffMin < 60)) {
     return {
       color: 'bg-amber-500',
       label: text.recent,
@@ -117,10 +118,10 @@ function getFreshnessInfo(timestamp: string, language: 'vi' | 'en') {
   }
 
   return {
-    color: 'bg-red-500',
+    color: 'bg-slate-400',
     label: text.offline,
-    ring: 'ring-red-500/30',
-    textClass: 'bg-red-500/10 text-red-600 dark:text-red-400',
+    ring: 'ring-slate-400/20',
+    textClass: 'bg-slate-500/10 text-slate-500 dark:text-slate-400',
     isOffline: true,
   };
 }
@@ -204,22 +205,28 @@ export default function FamilySidebar({
 
   const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-orange-500', 'bg-violet-500', 'bg-pink-500', 'bg-teal-500'];
 
+  const sortedMembers = [...members].sort((a, b) => 
+    a.profile.display_name.localeCompare(b.profile.display_name)
+  );
+
   if (collapsed) {
     return (
       <div className="w-14 bg-card border-r border-border/50 flex flex-col items-center py-4 gap-3">
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} className="rounded-full">
           <ChevronRight className="w-4 h-4" />
         </Button>
-        {members.map((m, i) => {
-          const freshness = m.location ? getFreshnessInfo(m.location.timestamp, language) : null;
+        {sortedMembers.map((m, i) => {
+          const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, language);
           const isUpdated = recentlyUpdated.has(m.user_id);
+          const isSOS = activeSOSUserIds.has(m.user_id);
           return (
             <button key={m.user_id} onClick={() => onMemberClick(m)} className="relative group">
               <Avatar
                 className={cn(
                   'w-8 h-8 transition-transform duration-200 group-hover:scale-110',
                   isUpdated && 'animate-bounce-subtle',
-                  freshness?.isOffline && 'opacity-60'
+                  freshness?.isOffline && 'opacity-60',
+                  isSOS && 'ring-2 ring-destructive animate-pulse'
                 )}
               >
                 {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
@@ -227,7 +234,12 @@ export default function FamilySidebar({
                   {getInitials(m.profile.display_name)}
                 </AvatarFallback>
               </Avatar>
-              {freshness && (
+              {isSOS ? (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive"></span>
+                </span>
+              ) : freshness && (
                 <span
                   className={cn(
                     'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card',
@@ -273,21 +285,25 @@ export default function FamilySidebar({
           <p className="text-xs font-medium text-muted-foreground px-2 py-1.5 uppercase tracking-wider">
             {text.members} ({members.length})
           </p>
-          {members.map((m, i) => {
-            const freshness = m.location ? getFreshnessInfo(m.location.timestamp, language) : null;
+          {sortedMembers.map((m, i) => {
+            const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, language);
             const isUpdated = recentlyUpdated.has(m.user_id);
             const canRemove = isAdmin && m.user_id !== user?.id;
+            const isSOS = activeSOSUserIds.has(m.user_id);
             return (
               <div key={m.user_id} className="group relative">
                 <button
                   onClick={() => onMemberClick(m)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/80 transition-all duration-200 text-left"
+                  className={cn(
+                    "w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/80 transition-all duration-200 text-left",
+                    isSOS && "bg-destructive/5 hover:bg-destructive/10 ring-1 ring-destructive/20"
+                  )}
                 >
                   <div className="relative">
                     <Avatar
                       className={cn(
                         'w-10 h-10 transition-transform duration-200 group-hover:scale-105',
-                        freshness ? `ring-2 ${freshness.ring}` : '',
+                        isSOS ? 'ring-2 ring-destructive ring-offset-2 animate-pulse' : (freshness ? `ring-2 ${freshness.ring}` : ''),
                         isUpdated && 'animate-bounce-subtle ring-2 ring-primary/50',
                         freshness?.isOffline && 'opacity-60'
                       )}
@@ -297,7 +313,11 @@ export default function FamilySidebar({
                         {getInitials(m.profile.display_name)}
                       </AvatarFallback>
                     </Avatar>
-                    {freshness && (
+                    {isSOS ? (
+                      <div className="absolute -bottom-1 -right-1 bg-destructive rounded-full p-1 border-2 border-card">
+                        <AlertTriangle className="w-3 h-3 text-white" />
+                      </div>
+                    ) : freshness && (
                       <span
                         className={cn(
                           'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card transition-colors',
@@ -307,24 +327,29 @@ export default function FamilySidebar({
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-foreground truncate flex items-center gap-1">
-                        {m.profile.display_name}
-                        {activeSOSUserIds.has(m.user_id) && (
-                          <AlertTriangle className="w-3.5 h-3.5 text-destructive animate-pulse shrink-0" />
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className={cn(
+                          "text-sm font-medium truncate",
+                          isSOS ? "text-destructive" : "text-foreground"
+                        )}>
+                          {m.profile.display_name}
+                        </p>
+                        {liveSharingUserIds.has(m.user_id) && (
+                          <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-primary/10 text-primary shrink-0">
+                            <Radio className="w-2.5 h-2.5 animate-pulse" />
+                            Live
+                          </span>
                         )}
-                      </p>
-                      {liveSharingUserIds.has(m.user_id) && (
-                        <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-primary/10 text-primary">
-                          <Radio className="w-2.5 h-2.5 animate-pulse" />
-                          Live
-                        </span>
-                      )}
-                      {freshness && !liveSharingUserIds.has(m.user_id) && (
-                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5', freshness.textClass)}>
-                          {freshness.isOffline && <WifiOff className="w-2.5 h-2.5" />}
-                          {freshness.label}
-                        </span>
+                        {freshness && !liveSharingUserIds.has(m.user_id) && (
+                          <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5 shrink-0', freshness.textClass)}>
+                            {freshness.isOffline && <WifiOff className="w-2.5 h-2.5" />}
+                            {freshness.label}
+                          </span>
+                        )}
+                      </div>
+                      {isSOS && (
+                        <Badge variant="destructive" className="text-[10px] h-5 px-1.5 animate-pulse uppercase font-bold shrink-0">SOS</Badge>
                       )}
                     </div>
                     {m.location ? (

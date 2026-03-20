@@ -56,6 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (user) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ status: 'offline' } as any)
+          .eq('user_id', user.id);
+      } catch (err) {
+        console.error('Logout status update failed:', err);
+      }
+    }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
