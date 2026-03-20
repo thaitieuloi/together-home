@@ -167,7 +167,7 @@ export default function ProfileSettings({ onBack, onOpenGeofenceSettings }: Prop
     setUploading(true);
 
     const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
-    const filePath = `avatars/${user.id}.${ext}`;
+    const filePath = `${user.id}/avatar.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from('avatars')

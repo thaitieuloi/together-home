@@ -70,6 +70,7 @@ function createCustomIcon(
   displayName: string,
   speedKmh: number | null,
   isMoving: boolean | null,
+  avatarUrl: string | null,
   isOffline?: boolean
 ) {
   const shortName = displayName.split(' ').pop() ?? displayName;
@@ -78,6 +79,10 @@ function createCustomIcon(
       ? `<span style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#2563eb;color:white;font-size:9px;font-weight:700;padding:1px 6px;border-radius:999px;white-space:nowrap;border:1.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${Math.round(speedKmh)} km/h</span>`
       : '';
   const offlineOpacity = isOffline ? 0.6 : 1;
+  const innerContent = avatarUrl 
+    ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`
+    : initials;
+
   return L.divIcon({
     className: 'custom-marker',
     html: `
@@ -90,7 +95,8 @@ function createCustomIcon(
           display:flex;align-items:center;justify-content:center;
           color:white;font-weight:600;font-size:14px;
           font-family:system-ui,sans-serif;position:relative;
-        ">${initials}
+          overflow:hidden;
+        ">${innerContent}
           <span style="position:absolute;bottom:-2px;right:-2px;width:12px;height:12px;border-radius:50%;background:${freshnessColor};border:2px solid white;"></span>
         </div>
         <span style="
@@ -369,6 +375,7 @@ export default function FamilyMap({
         m.profile.display_name,
         loc.speed !== null && loc.speed !== undefined ? loc.speed * 3.6 : null,
         loc.is_moving ?? null,
+        m.profile.avatar_url,
         isOffline
       );
       const isLive = liveSharingUserIds.has(m.user_id);
