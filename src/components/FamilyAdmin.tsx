@@ -102,6 +102,7 @@ export default function FamilyAdmin({ onBack }: Props) {
   const [regenerating, setRegenerating] = useState(false);
   const [actionMember, setActionMember] = useState<FamilyMemberWithProfile | null>(null);
   const [confirmType, setConfirmType] = useState<'remove' | 'promote' | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (family) setFamilyName(family.name);
@@ -157,35 +158,46 @@ export default function FamilyAdmin({ onBack }: Props) {
 
   const handleMemberAction = async () => {
     if (!actionMember || !family || !confirmType) return;
+    setIsProcessing(true);
 
     if (confirmType === 'remove') {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('family_members')
         .delete()
         .eq('user_id', actionMember.user_id)
-        .eq('family_id', family.id);
+        .eq('family_id', family.id)
+        .select();
 
       if (error) {
         toast({ title: t.error, description: error.message, variant: 'destructive' });
+      } else if (!data || data.length === 0) {
+        toast({ title: t.error, description: "Không thể xóa thành viên. Vui lòng kiểm tra lại quyền hạn của bạn.", variant: 'destructive' });
       } else {
         toast({ title: `Đã xóa ${actionMember.profile.display_name}` });
-        refetch();
+        await refetch();
       }
     } else if (confirmType === 'promote') {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('family_members')
         .update({ role: 'admin' })
         .eq('user_id', actionMember.user_id)
-        .eq('family_id', family.id);
+        .eq('family_id', family.id)
+        .select();
 
       if (error) {
         toast({ title: t.error, description: error.message, variant: 'destructive' });
+      } else if (!data || data.length === 0) {
+        toast({ title: t.error, description: "Cập nhật thất bại. Bạn có thể không có đủ quyền trong hệ thống.", variant: 'destructive' });
       } else {
-        toast({ title: t.successPromoted });
-        refetch();
+        toast({ 
+          title: t.successPromoted,
+          description: `Người dùng ${actionMember.profile.display_name} hiện đã là quản trị viên.`
+        });
+        await refetch();
       }
     }
 
+    setIsProcessing(false);
     setActionMember(null);
     setConfirmType(null);
   };
@@ -382,8 +394,15 @@ export default function FamilyAdmin({ onBack }: Props) {
             <AlertDialogCancel className="rounded-xl">{language === 'vi' ? 'Hủy' : 'Cancel'}</AlertDialogCancel>
             <AlertDialogAction
               className={confirmType === 'remove' ? 'bg-destructive text-white hover:bg-destructive/90 rounded-xl' : 'rounded-xl'}
-              onClick={handleMemberAction}
+              onClick={(e) => {
+                e.preventDefault();
+                handleMemberAction();
+              }}
+              disabled={isProcessing}
             >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
               {language === 'vi' ? 'Xác nhận' : 'Confirm'}
             </AlertDialogAction>
           </AlertDialogFooter>

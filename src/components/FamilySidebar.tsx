@@ -338,6 +338,9 @@ export default function FamilySidebar({
                         )}>
                           {m.profile.display_name}
                         </p>
+                        {m.role === 'admin' && (
+                          <ShieldCheck className="w-3 h-3 text-primary shrink-0" />
+                        )}
                         {liveSharingUserIds.has(m.user_id) && (
                           <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-primary/10 text-primary shrink-0">
                             <Radio className="w-2.5 h-2.5 animate-pulse" />
