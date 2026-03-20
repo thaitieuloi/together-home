@@ -386,26 +386,9 @@ export default function FamilyMap({
       const batteryText = loc.battery_level !== null && loc.battery_level !== undefined
         ? `<p style="margin:2px 0 0;font-size:11px;color:${loc.battery_level < 20 ? '#ef4444' : loc.battery_level < 50 ? '#f59e0b' : '#22c55e'};">🔋 ${loc.battery_level}%</p>`
         : '';
-      const popupContent = `
-        <div style="text-align:center; min-width:130px;">
-          <p style="margin:0; font-weight:600; font-size:14px;">${m.profile.display_name}</p>
-          ${isLive ? `<p style="margin:2px 0; font-size:11px; color:#3b82f6; font-weight:600;">${mapText.live}</p>` : ''}
-          <p style="margin:4px 0 0; font-size:12px; color:${freshness.dot}; font-weight:500;">
-            ● ${freshness.label}
-          </p>
-          <p style="margin:2px 0 0; font-size:12px; color:#6b7280;">
-            ${formatDistanceToNow(new Date(loc.timestamp), { addSuffix: true, locale: dateLocale })}
-          </p>
-          ${speedText}
-          ${batteryText}
-          ${loc.accuracy ? `<p style="margin:2px 0 0; font-size:11px; color:#9ca3af;">±${Math.round(loc.accuracy)}m</p>` : ''}
-        </div>
-      `;
-
       const existingMarker = markersRef.current.get(m.user_id);
       if (existingMarker) {
         existingMarker.setIcon(icon);
-        existingMarker.setPopupContent(popupContent);
 
         // Update accuracy circle
         const existingCircle = accuracyCirclesRef.current.get(m.user_id);
@@ -454,7 +437,6 @@ export default function FamilyMap({
       } else {
         // New marker
         const marker = L.marker(latlng, { icon });
-        marker.bindPopup(popupContent);
         marker.on('click', () => { onMemberClick?.(m); });
         markerLayerRef.current!.addLayer(marker);
         markersRef.current.set(m.user_id, marker);
@@ -563,16 +545,20 @@ export default function FamilyMap({
       .addTo(historyLayerRef.current);
 
     const endLoc = historyTrail[0];
-    L.circleMarker([endLoc.latitude, endLoc.longitude], {
-      radius: 6,
-      color: '#ef4444',
-      fillColor: '#ef4444',
-      fillOpacity: 1,
-    })
-      .bindPopup(`${mapText.ended}: ${new Date(endLoc.timestamp).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US')}`)
-      .addTo(historyLayerRef.current);
+    if (historyTrail.length > 1) {
+      L.circleMarker([endLoc.latitude, endLoc.longitude], {
+        radius: 6,
+        color: '#ef4444',
+        fillColor: '#ef4444',
+        fillOpacity: 1,
+      })
+        .bindPopup(`${mapText.ended}: ${new Date(endLoc.timestamp).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US')}`)
+        .addTo(historyLayerRef.current);
 
-    mapRef.current.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+      mapRef.current.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+    } else {
+      mapRef.current.setView([startLoc.latitude, startLoc.longitude], 15);
+    }
   }, [historyTrail, mapText.started, mapText.ended, language]);
 
   // Handle Playback Marker

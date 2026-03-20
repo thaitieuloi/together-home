@@ -173,7 +173,7 @@ export default function Dashboard() {
         .eq('user_id', member.user_id)
         .gte('timestamp', since)
         .order('timestamp', { ascending: false })
-        .limit(500);
+        .limit(2000);
 
       if (data && data.length > 0) {
         setHistoryTrail(data);
@@ -363,7 +363,7 @@ export default function Dashboard() {
     <>
     <div className="flex h-screen w-full overflow-hidden">
       {/* Desktop sidebar */}
-      <div className="hidden md:flex">
+      <div className="hidden md:flex relative z-10">
         <FamilySidebar
           family={family}
           members={members}
@@ -415,18 +415,21 @@ export default function Dashboard() {
       </div>
 
       {/* Top-right controls (desktop) */}
-      <div className="absolute top-4 right-4 z-[1000] hidden md:flex flex-col gap-2">
+      <div className="absolute top-6 right-6 z-[1000] hidden md:flex flex-col gap-3">
         <div className="relative">
           <Button
             size="icon"
             variant={showNotifications ? 'default' : 'secondary'}
-            className={cn('shadow-lg rounded-full transition-all duration-200', !showNotifications && 'glass glass-dark')}
+            className={cn(
+              'shadow-2xl w-12 h-12 rounded-full transition-all duration-300 hover:scale-110 active:scale-95 border border-white/10',
+              !showNotifications ? 'glass glass-dark' : 'bg-primary border-primary shadow-primary/20'
+            )}
             onClick={toggleNotifications}
           >
             <Bell className="w-5 h-5" />
           </Button>
           {notifUnread > 0 && !showNotifications && (
-            <Badge className="absolute -top-1.5 -right-1.5 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-background rounded-full animate-scale-in">
+            <Badge className="absolute -top-1 -right-1 h-5 min-w-[20px] flex items-center justify-center p-0 text-[9px] font-black bg-destructive text-destructive-foreground border-2 border-background rounded-full animate-scale-in">
               {notifUnread > 99 ? '99+' : notifUnread}
             </Badge>
           )}
@@ -434,7 +437,10 @@ export default function Dashboard() {
         <Button
           size="icon"
           variant={showHistory ? 'default' : 'secondary'}
-          className={cn('shadow-lg rounded-full transition-all duration-200', !showHistory && 'glass glass-dark')}
+          className={cn(
+            'shadow-2xl w-12 h-12 rounded-full transition-all duration-300 hover:scale-110 active:scale-95 border border-white/10',
+            !showHistory ? 'glass glass-dark' : 'bg-primary border-primary shadow-primary/20'
+          )}
           onClick={toggleHistory}
         >
           <History className="w-5 h-5" />
@@ -442,7 +448,10 @@ export default function Dashboard() {
         <Button
           size="icon"
           variant={showGeofences ? 'default' : 'secondary'}
-          className={cn('shadow-lg rounded-full transition-all duration-200', !showGeofences && 'glass glass-dark')}
+          className={cn(
+            'shadow-2xl w-12 h-12 rounded-full transition-all duration-300 hover:scale-110 active:scale-95 border border-white/10',
+            !showGeofences ? 'glass glass-dark' : 'bg-primary border-primary shadow-primary/20'
+          )}
           onClick={toggleGeofences}
         >
           <Shield className="w-5 h-5" />
@@ -450,8 +459,11 @@ export default function Dashboard() {
         <Button
           size="icon"
           variant={showDebug ? 'default' : 'secondary'}
-          className={cn('shadow-lg rounded-full transition-all duration-200', !showDebug && 'glass glass-dark')}
-          onClick={() => setShowDebug((p) => !p)}
+          className={cn(
+            'shadow-2xl w-12 h-12 rounded-full transition-all duration-300 hover:scale-110 active:scale-95 border border-white/10',
+            !showDebug ? 'glass glass-dark' : 'bg-primary border-primary shadow-primary/20'
+          )}
+          onClick={() => setShowDebug(!showDebug)}
         >
           <Bug className="w-5 h-5" />
         </Button>
@@ -472,26 +484,29 @@ export default function Dashboard() {
       </AnimatedPanel>
 
       {/* Live location toggle */}
-      <div className="absolute z-[1000] bottom-24 left-1/2 -translate-x-1/2 md:left-[calc(18rem+1rem)] md:bottom-6 md:translate-x-0">
+      <div className="absolute z-[1000] bottom-24 left-1/2 -translate-x-1/2 md:left-[calc(20rem+1rem)] md:bottom-6 md:translate-x-0">
         <div className="bg-card/90 backdrop-blur-sm rounded-xl shadow-lg p-2 border border-border/50">
           <LiveLocationToggle isSharing={isSharing} expiresAt={mySession?.expires_at} onStart={startSharing} onStop={stopSharing} />
         </div>
       </div>
 
       {/* Desktop bottom buttons */}
-      <div className="absolute bottom-6 right-4 z-[1000] hidden md:flex flex-col gap-2 items-end">
+      <div className="absolute bottom-10 right-6 z-[1000] hidden md:flex flex-col gap-3 items-end">
         <SOSButton />
         <div className="relative">
           <Button
             size="icon"
             variant={showChat ? 'default' : 'secondary'}
-            className={cn('shadow-lg w-12 h-12 rounded-full transition-all duration-200', !showChat && 'glass glass-dark')}
+            className={cn(
+               'shadow-2xl w-14 h-14 rounded-full transition-all duration-300 hover:scale-110 active:scale-95 border border-white/10',
+               !showChat ? 'glass glass-dark' : 'bg-primary border-primary shadow-primary/20'
+            )}
             onClick={toggleChat}
           >
-            <MessageCircle className="w-5 h-5" />
+            <MessageCircle className="w-6 h-6" />
           </Button>
           {unreadCount > 0 && !showChat && (
-            <Badge className="absolute -top-1.5 -right-1.5 h-5 min-w-[20px] flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground border-2 border-background rounded-full animate-scale-in">
+            <Badge className="absolute -top-1 -right-1 h-5 min-w-[22px] flex items-center justify-center p-0 text-[9px] font-black bg-destructive text-destructive-foreground border-2 border-background rounded-full animate-scale-in">
               {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           )}
@@ -505,7 +520,7 @@ export default function Dashboard() {
 
       {/* Mobile quick actions */}
       <div className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] w-[calc(100%-1.5rem)]">
-        <div className="glass glass-dark rounded-2xl border border-border/60 p-1.5 grid grid-cols-4 gap-1">
+        <div className="glass glass-dark rounded-2xl border border-border/60 p-1.5 grid grid-cols-5 gap-1">
           <Button variant={showNotifications ? 'default' : 'ghost'} className="h-10 rounded-xl relative" onClick={toggleNotifications}>
             <Bell className="w-4 h-4" />
             {notifUnread > 0 && !showNotifications && (
@@ -528,12 +543,16 @@ export default function Dashboard() {
               </Badge>
             )}
           </Button>
+          <Button variant={showDebug ? 'default' : 'ghost'} className="h-10 rounded-xl" onClick={() => setShowDebug(!showDebug)}>
+            <Bug className="w-4 h-4" />
+          </Button>
         </div>
-        <div className="mt-1 text-center text-[10px] text-muted-foreground flex justify-between px-2">
-          <span>{text.notifications}</span>
-          <span>{text.history}</span>
-          <span>{text.geofence}</span>
-          <span>{text.chat}</span>
+        <div className="mt-1.5 px-3 flex justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+          <span className="w-10 text-center">{text.notifications}</span>
+          <span className="w-10 text-center">{text.history}</span>
+          <span className="w-10 text-center">{text.geofence}</span>
+          <span className="w-10 text-center">{text.chat}</span>
+          <span className="w-10 text-center uppercase">Logs</span>
         </div>
       </div>
 
@@ -566,8 +585,8 @@ export default function Dashboard() {
         )}
       </AnimatedPanel>
 
-      {/* Map */}
-      <div className="flex-1 relative">
+      {/* Map - FULL SCREEN */}
+      <div className="absolute inset-0 z-0">
         <FamilyMap
           members={members}
           flyTo={flyTo}

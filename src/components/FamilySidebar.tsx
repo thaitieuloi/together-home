@@ -19,11 +19,11 @@ import {
   Battery,
   BatteryLow,
   BatteryWarning,
-  BatteryCharging,
   Gauge,
   WifiOff,
   ShieldCheck,
   AlertTriangle,
+  ChevronRightIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { enUS, vi } from 'date-fns/locale';
@@ -45,21 +45,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ScrollArea } from './ui/scroll-area';
 
 const SIDEBAR_TEXT = {
   vi: {
-    online: 'Online',
-    recent: 'Gần đây',
-    offline: 'Offline',
+    online: 'Trực tuyến',
+    recent: 'Vừa xong',
+    offline: 'Ngoại tuyến',
     copied: 'Đã sao chép mã mời!',
     removeError: 'Không thể xóa thành viên',
     removed: 'Đã xóa',
-    members: 'Thành viên',
+    members: 'Thành viên gia đình',
     noLocation: 'Chưa có vị trí',
-    viewTrip: 'Xem lịch sử di chuyển',
+    viewTrip: 'Xem lịch sử',
     removeMember: 'Xóa thành viên',
-    lightMode: 'Chế độ sáng',
-    darkMode: 'Chế độ tối',
+    lightMode: 'Sáng',
+    darkMode: 'Tối',
     settings: 'Cài đặt',
     signOut: 'Đăng xuất',
     removeMemberTitle: 'Xóa thành viên',
@@ -67,20 +68,21 @@ const SIDEBAR_TEXT = {
     fromFamily: 'khỏi nhóm gia đình?',
     cancel: 'Hủy',
     remove: 'Xóa',
+    familyId: 'ID Nhóm',
   },
   en: {
     online: 'Online',
-    recent: 'Recently active',
+    recent: 'Recently',
     offline: 'Offline',
     copied: 'Invite code copied!',
     removeError: 'Unable to remove member',
     removed: 'Removed',
-    members: 'Members',
+    members: 'Family Members',
     noLocation: 'No location yet',
-    viewTrip: 'View movement history',
+    viewTrip: 'Movement history',
     removeMember: 'Remove member',
-    lightMode: 'Light mode',
-    darkMode: 'Dark mode',
+    lightMode: 'Light',
+    darkMode: 'Dark',
     settings: 'Settings',
     signOut: 'Sign out',
     removeMemberTitle: 'Remove member',
@@ -88,6 +90,7 @@ const SIDEBAR_TEXT = {
     fromFamily: 'from this family?',
     cancel: 'Cancel',
     remove: 'Remove',
+    familyId: 'Family ID',
   },
 };
 
@@ -96,18 +99,14 @@ function getStatusInfo(status: 'online' | 'idle' | 'offline', timestamp: string 
   const now = getServerNow().getTime();
   const diffMs = timestamp ? Math.max(0, now - new Date(timestamp).getTime()) : Infinity;
   const diffMin = diffMs / 60000;
-
-  // We prioritize the explicit heartbeat status from the 'profiles' table.
-  // Location freshness (diffMin) is a secondary signal.
   
   if (status === 'online') {
     return {
       color: 'bg-emerald-500',
       label: text.online,
-      ring: 'ring-emerald-500/30',
-      textClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+      ring: 'ring-emerald-500/20',
+      textClass: 'text-emerald-500',
       isOffline: false,
-      staleLocation: diffMin > 15 && timestamp !== undefined // Location is old but user is online
     };
   }
 
@@ -115,8 +114,8 @@ function getStatusInfo(status: 'online' | 'idle' | 'offline', timestamp: string 
     return {
       color: 'bg-amber-500',
       label: text.recent,
-      ring: 'ring-amber-500/30',
-      textClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+      ring: 'ring-amber-500/20',
+      textClass: 'text-amber-500',
       isOffline: false,
     };
   }
@@ -124,8 +123,8 @@ function getStatusInfo(status: 'online' | 'idle' | 'offline', timestamp: string 
   return {
     color: 'bg-slate-400',
     label: text.offline,
-    ring: 'ring-slate-400/20',
-    textClass: 'bg-slate-500/10 text-slate-500 dark:text-slate-400',
+    ring: 'ring-slate-400/10',
+    textClass: 'text-slate-500',
     isOffline: true,
   };
 }
@@ -167,7 +166,6 @@ export default function FamilySidebar({
   const { user } = useAuth();
   const { language } = useLanguage();
   const text = SIDEBAR_TEXT[language];
-  const dateLocale = language === 'vi' ? vi : enUS;
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
@@ -215,281 +213,270 @@ export default function FamilySidebar({
 
   if (collapsed) {
     return (
-      <div className="w-14 bg-card border-r border-border/50 flex flex-col items-center py-4 gap-3">
-        <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} className="rounded-full">
+      <div className="w-16 h-full bg-background/80 backdrop-blur-xl border-r flex flex-col items-center py-6 gap-5 shadow-2xl relative z-10">
+        <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} className="rounded-full h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all">
           <ChevronRight className="w-4 h-4" />
         </Button>
-        {sortedMembers.map((m, i) => {
-          const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, language);
-          const isUpdated = recentlyUpdated.has(m.user_id);
-          const isSOS = activeSOSUserIds.has(m.user_id);
-          return (
-            <button key={m.user_id} onClick={() => onMemberClick(m)} className="relative group">
-              <Avatar
-                className={cn(
-                  'w-8 h-8 transition-transform duration-200 group-hover:scale-110',
-                  isUpdated && 'animate-bounce-subtle',
-                  freshness?.isOffline && 'opacity-60',
-                  isSOS && 'ring-2 ring-destructive animate-pulse'
-                )}
-              >
-                {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
-                <AvatarFallback className={cn('text-xs text-white', colors[i % colors.length])}>
-                  {getInitials(m.profile.display_name)}
-                </AvatarFallback>
-              </Avatar>
-              {isSOS ? (
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive"></span>
-                </span>
-              ) : freshness && (
-                <span
-                  className={cn(
-                    'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card',
-                    freshness.color
-                  )}
-                />
-              )}
-            </button>
-          );
-        })}
+        <ScrollArea className="flex-1 w-full">
+          <div className="flex flex-col items-center gap-4 py-2">
+            {sortedMembers.map((m, i) => {
+              const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, language);
+              const isSOS = activeSOSUserIds.has(m.user_id);
+              return (
+                <button
+                  key={m.user_id}
+                  onClick={() => onMemberClick(m)}
+                  className="relative group transition-transform active:scale-95"
+                >
+                  <Avatar
+                    className={cn(
+                      'w-10 h-10 ring-2 ring-offset-2 ring-offset-background border-2 border-transparent transition-all duration-300',
+                      isSOS ? 'ring-destructive animate-pulse' : (freshness ? `ring-${freshness.color.replace('bg-', '')}/40` : 'ring-transparent'),
+                      freshness?.isOffline && 'opacity-60 grayscale-[0.5]'
+                    )}
+                  >
+                    {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
+                    <AvatarFallback className={cn('text-[10px] font-bold text-white', colors[i % colors.length])}>
+                      {getInitials(m.profile.display_name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span
+                    className={cn(
+                      'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background shadow-sm',
+                      isSOS ? 'bg-destructive' : freshness?.color
+                    )}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </ScrollArea>
       </div>
     );
   }
 
   return (
     <>
-      <div className="w-72 bg-card border-r border-border/50 flex flex-col h-full">
-        {/* Header */}
-        <div className="p-4 border-b border-border/50">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Users className="w-4 h-4 text-primary" />
+      <div className="hidden md:flex w-80 h-full bg-background/80 backdrop-blur-3xl border-r flex-col overflow-hidden shadow-2xl animate-in slide-in-from-left duration-500 relative z-10">
+        {/* Header - Profile & Family Info */}
+        <div className="p-6 pb-4">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                <Users className="w-6 h-6 text-primary" />
               </div>
-              <h2 className="font-semibold text-foreground">{family.name}</h2>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-foreground uppercase tracking-tight truncate leading-tight">{family.name}</h2>
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">{text.familyId}</p>
+              </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} className="h-7 w-7 rounded-full">
-              <ChevronLeft className="w-4 h-4" />
+            <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} className="h-8 w-8 rounded-full opacity-50 hover:opacity-100 hover:bg-primary/10 hover:text-primary transition-all">
+              <ChevronLeft className="w-5 h-5" />
             </Button>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="font-mono text-xs rounded-full px-3">
-              {family.invite_code}
-            </Badge>
-            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full" onClick={copyInviteCode}>
-              <Copy className="w-3 h-3" />
-            </Button>
-          </div>
-        </div>
 
-        {/* Members */}
-        <div className="flex-1 overflow-auto p-2">
-          <p className="text-xs font-medium text-muted-foreground px-2 py-1.5 uppercase tracking-wider">
-            {text.members} ({members.length})
-          </p>
-          {sortedMembers.map((m, i) => {
-            const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, language);
-            const isUpdated = recentlyUpdated.has(m.user_id);
-            const canRemove = isAdmin && m.user_id !== user?.id;
-            const isSOS = activeSOSUserIds.has(m.user_id);
-            return (
-              <div key={m.user_id} className="group relative">
-                <button
-                  onClick={() => onMemberClick(m)}
-                  className={cn(
-                    "w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/80 transition-all duration-200 text-left",
-                    isSOS && "bg-destructive/5 hover:bg-destructive/10 ring-1 ring-destructive/20"
-                  )}
-                >
-                  <div className="relative">
-                    <Avatar
-                      className={cn(
-                        'w-10 h-10 transition-transform duration-200 group-hover:scale-105',
-                        isSOS ? 'ring-2 ring-destructive ring-offset-2 animate-pulse' : (freshness ? `ring-2 ${freshness.ring}` : ''),
-                        isUpdated && 'animate-bounce-subtle ring-2 ring-primary/50',
-                        freshness?.isOffline && 'opacity-60'
-                      )}
-                    >
-                      {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
-                      <AvatarFallback className={cn('text-sm font-medium text-white', colors[i % colors.length])}>
-                        {getInitials(m.profile.display_name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    {isSOS ? (
-                      <div className="absolute -bottom-1 -right-1 bg-destructive rounded-full p-1 border-2 border-card">
-                        <AlertTriangle className="w-3 h-3 text-white" />
-                      </div>
-                    ) : freshness && (
-                      <span
-                        className={cn(
-                          'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card transition-colors',
-                          freshness.color
-                        )}
-                      />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <p className={cn(
-                          "text-sm font-medium truncate",
-                          isSOS ? "text-destructive" : "text-foreground"
-                        )}>
-                          {m.profile.display_name}
-                        </p>
-                        {m.role === 'admin' && (
-                          <ShieldCheck className="w-3 h-3 text-primary shrink-0" />
-                        )}
-                        {liveSharingUserIds.has(m.user_id) && (
-                          <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-primary/10 text-primary shrink-0">
-                            <Radio className="w-2.5 h-2.5 animate-pulse" />
-                            Live
-                          </span>
-                        )}
-                        {freshness && !liveSharingUserIds.has(m.user_id) && (
-                          <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-0.5 shrink-0', freshness.textClass)}>
-                            {freshness.isOffline && <WifiOff className="w-2.5 h-2.5" />}
-                            {freshness.label}
-                          </span>
-                        )}
-                      </div>
-                      {isSOS && (
-                        <Badge variant="destructive" className="text-[10px] h-5 px-1.5 animate-pulse uppercase font-bold shrink-0">SOS</Badge>
-                      )}
-                    </div>
-                    {m.location || m.profile.updated_at ? (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {(() => {
-                          const locTime = m.location?.timestamp ? new Date(m.location.timestamp).getTime() : 0;
-                          const profileTime = m.profile.updated_at ? new Date(m.profile.updated_at).getTime() : 0;
-                          const bestTime = Math.max(locTime, profileTime);
-                          return bestTime > 0 ? formatRelativeTime(bestTime, language) : text.noLocation;
-                        })()}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">{text.noLocation}</p>
-                    )}
-                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      {m.location?.is_moving && m.location?.speed && m.location.speed > 3 && (
-                        <span className={cn(
-                          'flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium',
-                          m.location.speed > 40
-                            ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                            : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                        )}>
-                          {m.location.speed > 40 ? '🚗' : <Gauge className="w-2.5 h-2.5" />}
-                          {Math.round(m.location.speed)} km/h
-                        </span>
-                      )}
-                      {(() => {
-                        const bat = getBatteryInfo(m.location?.battery_level ?? null);
-                        if (!bat || m.location?.battery_level === null || m.location?.battery_level === undefined) return null;
-                        return (
-                          <span className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${bat.bg} ${bat.color}`}>
-                            <bat.Icon className={`w-2.5 h-2.5 ${bat.pulse ? 'animate-pulse' : ''}`} />
-                            {m.location!.battery_level}%
-                          </span>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                  <MapPin className="w-4 h-4 text-muted-foreground/50 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-                {/* Action buttons on hover */}
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {m.location && onShowTrip && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onShowTrip(m);
-                      }}
-                      title={text.viewTrip}
-                    >
-                      <Route className="w-3.5 h-3.5 text-primary" />
-                    </Button>
-                  )}
-                  {canRemove && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-full hover:bg-destructive/10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRemovingMember(m);
-                      }}
-                      title={text.removeMember}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer */}
-        <div className="p-3 border-t border-border/50 space-y-0.5">
-          <Button
-            variant="ghost"
-            onClick={toggleTheme}
-            className="w-full justify-start text-muted-foreground rounded-xl"
-            size="sm"
+          <div 
+            onClick={copyInviteCode}
+            className="group flex flex-col gap-2 p-4 bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-2xl cursor-pointer transition-all active:scale-[0.98]"
           >
-            {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
-            {theme === 'dark' ? text.lightMode : text.darkMode}
-          </Button>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-primary uppercase tracking-widest leading-none">Mã mời nhóm</span>
+              <button className="p-1 rounded-md bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                <Copy className="w-3.5 h-3.5 text-primary" />
+              </button>
+            </div>
+            <p className="font-mono text-xl font-bold tracking-[0.2em] text-foreground leading-none">{family.invite_code}</p>
+          </div>
+        </div>
+
+        {/* Member List */}
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="px-6 py-3 flex items-center justify-between border-b border-white/5">
+            <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">
+              {text.members} <span className="text-primary/70 ml-1">({members.length})</span>
+            </span>
+          </div>
+          
+          <ScrollArea className="flex-1">
+            <div className="space-y-1 p-3 pb-8">
+              {sortedMembers.map((m, i) => {
+                const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, language);
+                const isUpdated = recentlyUpdated.has(m.user_id);
+                const isSOS = activeSOSUserIds.has(m.user_id);
+                const isLive = liveSharingUserIds.has(m.user_id);
+                const battery = getBatteryInfo(m.location?.battery_level ?? null);
+
+                return (
+                  <div key={m.user_id} className="group relative">
+                    <button
+                      onClick={() => onMemberClick(m)}
+                      className={cn(
+                        "w-full flex items-center gap-4 p-3.5 rounded-2xl transition-all duration-300 text-left border border-transparent shadow-sm",
+                        isSOS 
+                          ? "bg-destructive/10 border-destructive/30" 
+                          : "hover:bg-white/40 dark:hover:bg-white/5 hover:border-white/20 active:scale-[0.98] bg-white/10 dark:bg-white-[0.02]"
+                      )}
+                    >
+                      {/* Avatar with Status */}
+                      <div className="relative shrink-0">
+                        <Avatar
+                          className={cn(
+                            'w-14 h-14 transition-all duration-500 group-hover:scale-105 border-2 border-background',
+                            isSOS ? 'ring-4 ring-destructive/40 animate-pulse' : (freshness ? `ring-2 ${freshness.ring}` : ''),
+                            isUpdated && 'animate-bounce-subtle ring-4 ring-primary/30',
+                            freshness?.isOffline && 'opacity-70 grayscale-[0.3]'
+                          )}
+                        >
+                          {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
+                          <AvatarFallback className={cn('text-lg font-bold text-white', colors[i % colors.length])}>
+                            {getInitials(m.profile.display_name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {isSOS ? (
+                          <div className="absolute -bottom-1 -right-1 bg-destructive rounded-full p-1.5 border-2 border-background shadow-lg">
+                            <AlertTriangle className="w-3.5 h-3.5 text-white" />
+                          </div>
+                        ) : (
+                          <span
+                            className={cn(
+                              'absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 rounded-full border-2 border-background shadow-md transition-colors',
+                              freshness?.color || 'bg-slate-300'
+                            )}
+                          />
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className={cn(
+                            "text-base font-bold tracking-tight truncate",
+                            isSOS ? "text-destructive" : "text-foreground"
+                          )}>
+                            {m.profile.display_name}
+                          </p>
+                          {m.role === 'admin' && (
+                            <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                          )}
+                          {isSOS && (
+                            <Badge variant="destructive" className="h-4 px-1.5 text-[9px] font-bold uppercase animate-pulse">SOS</Badge>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={cn('text-[11px] font-bold uppercase tracking-wider shrink-0', freshness?.textClass)}>
+                            {isLive ? (
+                              <span className="flex items-center gap-1 text-primary">
+                                <Radio className="w-3.5 h-3.5 animate-pulse" /> LIVE
+                              </span>
+                            ) : freshness?.label}
+                          </span>
+                          <span className="text-muted-foreground/30">•</span>
+                          <div className="flex items-center gap-1.5 overflow-hidden">
+                            <Clock className="w-3 h-3 shrink-0 opacity-40 text-muted-foreground" />
+                            <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
+                              {(() => {
+                                const locTime = m.location?.timestamp ? new Date(m.location.timestamp).getTime() : 0;
+                                const profileTime = m.profile.updated_at ? new Date(m.profile.updated_at).getTime() : 0;
+                                const bestTime = Math.max(locTime, profileTime);
+                                return bestTime > 0 ? formatRelativeTime(bestTime, language) : text.noLocation;
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-2">
+                          {m.location?.is_moving && m.location?.speed && m.location.speed > 3 && (
+                            <div className={cn(
+                              'flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tight shrink-0',
+                              m.location.speed > 40
+                                ? 'bg-orange-500/10 text-orange-600 border border-orange-500/20'
+                                : 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
+                            )}>
+                              {m.location.speed > 40 ? '🚗' : <Gauge className="w-3 h-3" />}
+                              {Math.round(m.location.speed)} km/h
+                            </div>
+                          )}
+                          {battery && (
+                            <div className={cn('flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border', battery.bg.replace('/10', '/5'), battery.color, 'border-current/10')}>
+                              <battery.Icon className={cn('w-3 h-3', battery.pulse && 'animate-pulse')} />
+                              {m.location!.battery_level}%
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <ChevronRightIcon className="w-5 h-5 text-muted-foreground/20 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all shrink-0" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-5 pt-3 border-t mt-auto space-y-2 bg-black/5 dark:bg-white/5">
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleTheme}
+              className="justify-start text-[12px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-white/20 dark:hover:bg-black/20 h-10 rounded-xl px-4"
+            >
+              {theme === 'dark' ? <Sun className="w-4 h-4 mr-2.5" /> : <Moon className="w-4 h-4 mr-2.5" />}
+              {theme === 'dark' ? text.lightMode : text.darkMode}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onOpenProfile}
+              className="justify-start text-[12px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-white/20 dark:hover:bg-black/20 h-10 rounded-xl px-4"
+            >
+              <Settings className="w-4 h-4 mr-2.5" /> {text.settings}
+            </Button>
+          </div>
+          
           {onOpenFamilyAdmin && isAdmin && (
             <Button
               variant="ghost"
+              size="sm"
               onClick={onOpenFamilyAdmin}
-              className="w-full justify-start text-primary hover:text-primary hover:bg-primary/10 rounded-xl"
-              size="sm"
+              className="w-full justify-start text-[12px] font-bold uppercase tracking-wider text-primary hover:bg-primary/10 h-10 rounded-xl px-4"
             >
-              <ShieldCheck className="w-4 h-4 mr-2" /> {language === 'vi' ? 'Quản lý gia đình' : 'Family Admin'}
+              <ShieldCheck className="w-4.5 h-4.5 mr-2.5" /> {language === 'vi' ? 'Quản lý nhóm' : 'Family Admin'}
             </Button>
           )}
-          {onOpenProfile && (
-            <Button
-              variant="ghost"
-              onClick={onOpenProfile}
-              className="w-full justify-start text-muted-foreground rounded-xl"
-              size="sm"
-            >
-              <Settings className="w-4 h-4 mr-2" /> {text.settings}
-            </Button>
-          )}
+
           <Button
             variant="ghost"
-            onClick={onSignOut}
-            className="w-full justify-start text-muted-foreground hover:text-destructive rounded-xl"
             size="sm"
+            onClick={onSignOut}
+            className="w-full justify-start text-[12px] font-bold uppercase tracking-wider text-destructive/80 hover:text-destructive hover:bg-destructive/10 h-10 rounded-xl px-4"
           >
-            <LogOut className="w-4 h-4 mr-2" /> {text.signOut}
+            <LogOut className="w-4.5 h-4.5 mr-2.5" /> {text.signOut}
           </Button>
+          
+          <p className="text-[10px] text-center font-bold text-muted-foreground/40 uppercase tracking-[0.2em] pt-2">
+            Family Tracker v2.0
+          </p>
         </div>
       </div>
 
-      {/* Remove member confirmation */}
+      {/* Remove member confirmation (shared state) */}
       <AlertDialog open={!!removingMember} onOpenChange={(open) => !open && setRemovingMember(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="glass glass-dark border-white/10 rounded-3xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>{text.removeMemberTitle}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {text.removeMemberConfirm} <strong>{removingMember?.profile.display_name}</strong> {text.fromFamily}
+            <AlertDialogTitle className="font-bold text-xl uppercase tracking-tight">{text.removeMemberTitle}</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm font-medium">
+              {text.removeMemberConfirm} <strong className="text-foreground">{removingMember?.profile.display_name}</strong> {text.fromFamily}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{text.cancel}</AlertDialogCancel>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="rounded-xl font-bold uppercase text-xs tracking-widest border-none bg-muted hover:bg-muted/80">{text.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRemoveMember}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="rounded-xl font-bold uppercase text-xs tracking-widest bg-destructive text-white hover:bg-destructive/90"
             >
               {text.remove}
             </AlertDialogAction>
