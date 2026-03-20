@@ -26,8 +26,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatDistanceToNow } from 'date-fns';
 import { enUS, vi } from 'date-fns/locale';
+import { formatRelativeTime, getServerNow } from '@/lib/time';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { useTheme } from 'next-themes';
@@ -93,7 +93,8 @@ const SIDEBAR_TEXT = {
 
 function getStatusInfo(status: 'online' | 'idle' | 'offline', timestamp: string | undefined, language: 'vi' | 'en') {
   const text = SIDEBAR_TEXT[language];
-  const diffMs = timestamp ? Math.max(0, Date.now() - new Date(timestamp).getTime()) : Infinity;
+  const now = getServerNow().getTime();
+  const diffMs = timestamp ? Math.max(0, now - new Date(timestamp).getTime()) : Infinity;
   const diffMin = diffMs / 60000;
 
   // We prioritize the explicit heartbeat status from the 'profiles' table.
@@ -358,10 +359,15 @@ export default function FamilySidebar({
                         <Badge variant="destructive" className="text-[10px] h-5 px-1.5 animate-pulse uppercase font-bold shrink-0">SOS</Badge>
                       )}
                     </div>
-                    {m.location ? (
+                    {m.location || m.profile.updated_at ? (
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {formatDistanceToNow(new Date(m.location.timestamp), { addSuffix: true, locale: dateLocale })}
+                        {(() => {
+                          const locTime = m.location?.timestamp ? new Date(m.location.timestamp).getTime() : 0;
+                          const profileTime = m.profile.updated_at ? new Date(m.profile.updated_at).getTime() : 0;
+                          const bestTime = Math.max(locTime, profileTime);
+                          return bestTime > 0 ? formatRelativeTime(bestTime, language) : text.noLocation;
+                        })()}
                       </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">{text.noLocation}</p>

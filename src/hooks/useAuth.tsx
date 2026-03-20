@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { syncServerTime } from '@/lib/time';
 
 interface AuthContextType {
   user: User | null;
@@ -29,6 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      // Synchronize server time for accurate "ago" displays
+      syncServerTime();
     });
 
     return () => subscription.unsubscribe();

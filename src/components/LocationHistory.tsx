@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { vi as viLocale, enUS } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { getServerNow } from '@/lib/time';
 
 interface Props {
   members: FamilyMemberWithProfile[];
@@ -179,7 +180,7 @@ export default function LocationHistory({ members, onHistoryLoaded, onClose, onP
     setLoading(true);
 
     const range = ranges.find((r) => r.value === selectedRange);
-    const since = new Date(Date.now() - (range?.hours ?? 3) * 60 * 60 * 1000).toISOString();
+    const since = new Date(getServerNow().getTime() - (range?.hours ?? 3) * 60 * 60 * 1000).toISOString();
 
     const { data } = await supabase
       .from('user_locations')

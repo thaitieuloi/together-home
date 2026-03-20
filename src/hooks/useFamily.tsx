@@ -11,6 +11,7 @@ export interface FamilyMemberWithProfile {
     display_name: string;
     avatar_url: string | null;
     status: 'online' | 'idle' | 'offline';
+    updated_at: string;
   };
   location?: {
     latitude: number;
@@ -97,7 +98,7 @@ export function useFamily() {
         avatar_url: profile?.avatar_url || legacyUser?.photo_url || null,
         status: (profile as any)?.status || 'offline',
         created_at: profile?.created_at || legacyUser?.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        updated_at: profile?.updated_at || legacyUser?.updated_at || new Date().toISOString(),
       };
 
       const loc = locationMap.get(m.user_id);
