@@ -236,7 +236,7 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
 
         <div className="grid grid-cols-2 gap-3">
           <Button
-            onClick={() => { onMessage?.(member); onClose(); }}
+            onClick={() => { onMessage?.(member); }}
             variant="secondary"
             className="h-14 rounded-2xl font-bold uppercase tracking-widest text-[11px] gap-2 glass glass-light hover:bg-white/20 transition-all active:scale-95 shadow-md"
           >
@@ -244,7 +244,7 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
             {t.message}
           </Button>
           <Button
-            onClick={() => { onViewHistory?.(member); onClose(); }}
+            onClick={() => { onViewHistory?.(member); }}
             variant="secondary"
             className="h-14 rounded-2xl font-bold uppercase tracking-widest text-[11px] gap-2 glass glass-light hover:bg-white/20 transition-all active:scale-95 shadow-md"
           >

@@ -1,166 +1,259 @@
 import { Tables } from '@/integrations/supabase/types';
 
-export interface TripSegment {
+export type TripSegment = {
   type: 'trip' | 'stay';
   startTime: string;
   endTime: string;
   durationMinutes: number;
   points: Tables<'user_locations'>[];
-  distance?: number;   // metres
-  avgSpeed?: number;   // m/s
-  maxSpeed?: number;   // m/s
+  distance?: number; // meters
+  avgSpeed?: number; // km/h
+  maxSpeed?: number; // km/h
   startLocation: { lat: number; lng: number };
   endLocation: { lat: number; lng: number };
-}
-
-// ─── Activity classification ──────────────────────────────────────────────────
-
-export type ActivityType = 'driving' | 'cycling' | 'walking' | 'stationary';
-
-export function getActivityType(avgSpeedMs: number): ActivityType {
-  const kmh = avgSpeedMs * 3.6;
-  if (kmh > 25) return 'driving';
-  if (kmh > 8)  return 'cycling';
-  if (kmh > 0.5) return 'walking';
-  return 'stationary';
-}
-
-const ACTIVITY_LABELS: Record<ActivityType, { vi: string; en: string }> = {
-  driving:     { vi: 'Đi xe',       en: 'Driving'    },
-  cycling:     { vi: 'Đi xe đạp',   en: 'Cycling'    },
-  walking:     { vi: 'Đi bộ',       en: 'Walking'    },
-  stationary:  { vi: 'Nghỉ tại chỗ', en: 'Stationary' },
 };
 
-export function getActivityLabel(avgSpeedMs: number, lang: 'vi' | 'en' = 'vi'): string {
-  return ACTIVITY_LABELS[getActivityType(avgSpeedMs)][lang];
-}
-
-// ─── Distance helper ──────────────────────────────────────────────────────────
-
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371e3;
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(Δφ / 2) ** 2 +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// ─── Trip detection ───────────────────────────────────────────────────────────
-
-const STATIONARY_SPEED_THRESHOLD = 0.8; // m/s ≈ 3 km/h
-const LARGE_GAP_MINUTES = 30;
-const MIN_SEGMENT_DURATION = 1; // minutes — filter GPS noise below this
+const STAY_RADIUS_METERS = 100;    // Increased to absorb small movements
+const STAY_DURATION_MINUTES = 10;  // Minimum time to be considered a stay
+const GAP_THRESHOLD_MINUTES = 15;
+const MIN_TRIP_DISTANCE_METERS = 500; // Ignore trips shorter than this unless duration is long
+const MIN_TRIP_DURATION_MINUTES = 4;
 
 /**
- * Detects trips and stays from a list of location points.
- * Input may be in any order; function sorts internally.
+ * Senior-level logic for detecting trips and stays (iSharing style)
+ * Uses a state-machine approach with radius-based dwell detection.
  */
 export function detectTrips(points: Tables<'user_locations'>[]): TripSegment[] {
   if (points.length === 0) return [];
 
-  // Sort chronologically
+  // 1. Sort chronologically
   const sorted = [...points].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
-  // ── Pass 1: split on large time gaps ────────────────────────────────────────
-  const coarseSegments: Tables<'user_locations'>[][] = [];
-  let current: Tables<'user_locations'>[] = [sorted[0]];
-
+  const segments: TripSegment[] = [];
+  let currentSegment: Tables<'user_locations'>[] = [sorted[0]];
+  
   for (let i = 1; i < sorted.length; i++) {
-    const timeDiff =
-      (new Date(sorted[i].timestamp).getTime() - new Date(sorted[i - 1].timestamp).getTime()) /
-      60000;
-    if (timeDiff > LARGE_GAP_MINUTES) {
-      coarseSegments.push(current);
-      current = [sorted[i]];
-    } else {
-      current.push(sorted[i]);
-    }
-  }
-  if (current.length > 0) coarseSegments.push(current);
-
-  // ── Pass 2: split each coarse segment by movement state ─────────────────────
-  const refined: TripSegment[] = [];
-
-  for (const seg of coarseSegments) {
-    if (seg.length < 3) {
-      refined.push(finalizeSegment(seg));
+    const prev = sorted[i - 1];
+    const curr = sorted[i];
+    
+    const timeDiff = (new Date(curr.timestamp).getTime() - new Date(prev.timestamp).getTime()) / 60000;
+    
+    // Large time gap suggests a break in tracking
+    if (timeDiff > GAP_THRESHOLD_MINUTES) {
+      if (currentSegment.length > 0) {
+        segments.push(processRawSegment(currentSegment));
+      }
+      currentSegment = [curr];
       continue;
     }
-
-    const base = finalizeSegment(seg);
-    let isMoving = (base.avgSpeed ?? 0) > STATIONARY_SPEED_THRESHOLD;
-    let subPoints: Tables<'user_locations'>[] = [seg[0]];
-
-    for (let i = 1; i < seg.length; i++) {
-      const p = seg[i];
-      const pPrev = seg[i - 1];
-      const d = getDistance(pPrev.latitude, pPrev.longitude, p.latitude, p.longitude);
-      const t = (new Date(p.timestamp).getTime() - new Date(pPrev.timestamp).getTime()) / 1000;
-      const s = t > 0 ? d / t : 0;
-      const pMoving = s > STATIONARY_SPEED_THRESHOLD;
-
-      if (pMoving !== isMoving) {
-        if (subPoints.length > 0) refined.push(finalizeSegment(subPoints));
-        subPoints = [p];
-        isMoving = pMoving;
-      } else {
-        subPoints.push(p);
-      }
-    }
-    if (subPoints.length > 0) refined.push(finalizeSegment(subPoints));
+    
+    currentSegment.push(curr);
+  }
+  
+  if (currentSegment.length > 0) {
+    segments.push(processRawSegment(currentSegment));
   }
 
-  // ── Pass 3: classify, filter noise, sort ────────────────────────────────────
-  return refined
-    .map((s) => {
-      const isStay = (s.avgSpeed ?? 0) < STATIONARY_SPEED_THRESHOLD || (s.distance ?? 0) < 50;
-      return { ...s, type: isStay ? 'stay' : 'trip' } as TripSegment;
-    })
-    .filter((s) => s.points.length > 0)
-    .filter((s) => s.durationMinutes >= MIN_SEGMENT_DURATION) // ← remove GPS noise
-    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  // 2. Refine segments: Split into stays and trips based on movement
+  const refinedSegments: TripSegment[] = [];
+  for (const seg of segments) {
+    const subSegments = splitByMovement(seg.points);
+    refinedSegments.push(...subSegments);
+  }
+
+  // 3. Merge adjacent stays if they are at the same location
+  const mergedStays = mergeAdjacentStays(refinedSegments);
+
+  // 4. Final cleaning: Merge tiny/insignificant trips into adjacent stays
+  return cleanTinyTrips(mergedStays);
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+function cleanTinyTrips(segments: TripSegment[]): TripSegment[] {
+  if (segments.length === 0) return [];
+  
+  const results: TripSegment[] = [];
+  
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    
+    // If it's a trip but it's very tiny, we skip it or merge it
+    if (seg.type === 'trip') {
+      const isTiny = (seg.distance ?? 0) < MIN_TRIP_DISTANCE_METERS && seg.durationMinutes < 10;
+      
+      if (isTiny && results.length > 0) {
+        // Merge into the previous stay
+        const prev = results[results.length - 1];
+        if (prev.type === 'stay') {
+          results[results.length - 1] = {
+            ...prev,
+            endTime: seg.endTime,
+            durationMinutes: prev.durationMinutes + seg.durationMinutes,
+            points: [...prev.points, ...seg.points],
+            endLocation: seg.endLocation
+          };
+          continue;
+        }
+      }
+    }
+    
+    results.push(seg);
+  }
+  
+  return results;
+}
 
-function finalizeSegment(points: Tables<'user_locations'>[]): TripSegment {
+function processRawSegment(points: Tables<'user_locations'>[]): TripSegment {
   const start = points[0];
   const end = points[points.length - 1];
-  const durationMin =
-    (new Date(end.timestamp).getTime() - new Date(start.timestamp).getTime()) / 60000;
-
-  let totalDist = 0;
-  let maxS = 0;
+  const duration = (new Date(end.timestamp).getTime() - new Date(start.timestamp).getTime()) / 60000;
+  
+  const distance = calculateTotalDistance(points);
+  const avgSpeed = duration > 0 ? (distance / 1000) / (duration / 60) : 0;
+  
+  // Calculate max speed between points
+  let maxSpeed = 0;
   for (let i = 1; i < points.length; i++) {
-    const d = getDistance(
+    const d = haversine(points[i-1].latitude, points[i-1].longitude, points[i].latitude, points[i].longitude);
+    const t = (new Date(points[i].timestamp).getTime() - new Date(points[i-1].timestamp).getTime()) / 3600000; // hours
+    if (t > 0) {
+      const s = (d / 1000) / t;
+      if (s < 150 && s > maxSpeed) maxSpeed = s; // Filter outlier spikes > 150km/h
+    }
+  }
+
+  return {
+    type: distance > STAY_RADIUS_METERS ? 'trip' : 'stay',
+    startTime: start.timestamp,
+    endTime: end.timestamp,
+    durationMinutes: Math.round(duration),
+    points,
+    distance: Math.round(distance),
+    avgSpeed: Number(avgSpeed.toFixed(1)),
+    maxSpeed: Number(maxSpeed.toFixed(1)),
+    startLocation: { lat: start.latitude, lng: start.longitude },
+    endLocation: { lat: end.latitude, lng: end.longitude },
+  };
+}
+
+/**
+ * Splits a sequence of points into Trips and Stays.
+ * If points stay within a radius for a certain time, it's a Stay.
+ */
+function splitByMovement(points: Tables<'user_locations'>[]): TripSegment[] {
+  if (points.length < 2) return [processRawSegment(points)];
+
+  const results: TripSegment[] = [];
+  let currentGroup: Tables<'user_locations'>[] = [points[0]];
+  let isPotentialStay = true;
+
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    const startP = currentGroup[0];
+    
+    const distFromStart = haversine(startP.latitude, startP.longitude, p.latitude, p.longitude);
+    
+    if (distFromStart > STAY_RADIUS_METERS) {
+      // We moved out of the radius. 
+      // Check if the current group was a valid stay
+      const duration = (new Date(p.timestamp).getTime() - new Date(startP.timestamp).getTime()) / 60000;
+      
+      if (duration >= STAY_DURATION_MINUTES) {
+        // Yes, the previous group was a stay
+        results.push(processRawSegment(currentGroup));
+        currentGroup = [p];
+      } else {
+        // No, we are just moving. Continue adding to group
+        currentGroup.push(p);
+      }
+    } else {
+      currentGroup.push(p);
+    }
+  }
+  
+  if (currentGroup.length > 0) {
+    results.push(processRawSegment(currentGroup));
+  }
+  
+  return results;
+}
+
+function mergeAdjacentStays(segments: TripSegment[]): TripSegment[] {
+  if (segments.length < 2) return segments;
+  
+  const merged: TripSegment[] = [];
+  let current = segments[0];
+  
+  for (let i = 1; i < segments.length; i++) {
+    const next = segments[i];
+    
+    // If both are stays and very close to each other, merge them
+    if (current.type === 'stay' && next.type === 'stay') {
+      const dist = haversine(
+        current.endLocation.lat, current.endLocation.lng,
+        next.startLocation.lat, next.startLocation.lng
+      );
+      
+      if (dist < STAY_RADIUS_METERS * 2) {
+        current = {
+          ...current,
+          endTime: next.endTime,
+          durationMinutes: current.durationMinutes + next.durationMinutes,
+          points: [...current.points, ...next.points],
+          endLocation: next.endLocation
+        };
+        continue;
+      }
+    }
+    
+    merged.push(current);
+    current = next;
+  }
+  
+  merged.push(current);
+  return merged;
+}
+
+function calculateTotalDistance(points: Tables<'user_locations'>[]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += haversine(
       points[i - 1].latitude,
       points[i - 1].longitude,
       points[i].latitude,
       points[i].longitude
     );
-    totalDist += d;
-    const t = (new Date(points[i].timestamp).getTime() - new Date(points[i - 1].timestamp).getTime()) / 1000;
-    const s = t > 0 ? d / t : 0;
-    if (s > maxS) maxS = s;
   }
+  return total;
+}
 
-  return {
-    type: 'trip',
-    startTime: start.timestamp,
-    endTime: end.timestamp,
-    durationMinutes: Math.round(durationMin),
-    points,
-    distance: Math.round(totalDist),
-    avgSpeed: durationMin > 0 ? totalDist / (durationMin * 60) : 0,
-    maxSpeed: maxS,
-    startLocation: { lat: start.latitude, lng: start.longitude },
-    endLocation:   { lat: end.latitude,   lng: end.longitude   },
+function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // metres
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+export function getActivityType(avgSpeedKmh: number): 'walking' | 'cycling' | 'driving' {
+  if (avgSpeedKmh < 6) return 'walking';
+  if (avgSpeedKmh < 25) return 'cycling';
+  return 'driving';
+}
+
+export function getActivityLabel(type: 'walking' | 'cycling' | 'driving', language: 'vi' | 'en'): string {
+  const labels = {
+    walking: { vi: 'Đi bộ', en: 'Walking' },
+    cycling: { vi: 'Đạp xe', en: 'Cycling' },
+    driving: { vi: 'Ô tô/Xe máy', en: 'Driving' },
   };
+  return labels[type][language];
 }

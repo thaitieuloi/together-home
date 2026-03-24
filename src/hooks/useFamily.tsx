@@ -35,19 +35,24 @@ export function useFamily() {
     setLoading(true);
 
     // Get user's family membership
-    const { data: membership } = await supabase
+    const { data: memberships } = await supabase
       .from('family_members')
       .select('family_id, role')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle();
+      .eq('user_id', user.id);
 
-    if (!membership) {
+    if (!memberships || memberships.length === 0) {
+      console.warn('[useFamily] No family membership found for user:', user.id);
       setFamily(null);
       setMembers([]);
       setLoading(false);
       return;
     }
+
+    // For now, take the first family, but log if there are multiple
+    if (memberships.length > 1) {
+      console.info('[useFamily] User belongs to multiple families:', memberships);
+    }
+    const membership = memberships[0];
 
     // Get family
     const { data: familyData } = await supabase
@@ -56,13 +61,21 @@ export function useFamily() {
       .eq('id', membership.family_id)
       .single();
 
+    if (!familyData) {
+      console.error('[useFamily] Family not found for ID:', membership.family_id);
+      setLoading(false);
+      return;
+    }
+
     setFamily(familyData);
 
-    // Get all members in one query
+    // Get all members
     const { data: membersData } = await supabase
       .from('family_members')
       .select('user_id, role')
       .eq('family_id', membership.family_id);
+
+    console.log(`[useFamily] Found ${membersData?.length || 0} members in family_members for family:`, familyData.name);
 
     if (!membersData || membersData.length === 0) {
       setMembers([]);
@@ -89,12 +102,9 @@ export function useFamily() {
       const profile = profileMap.get(m.user_id);
       const legacyUser = legacyUserMap.get(m.user_id);
       
-      // Use profile if exists, otherwise fallback to legacy users table
-      if (!profile && !legacyUser) continue;
-
       const finalizedProfile = {
         user_id: m.user_id,
-        display_name: profile?.display_name || legacyUser?.name || 'Unknown',
+        display_name: profile?.display_name || legacyUser?.name || 'Unknown User',
         avatar_url: profile?.avatar_url || legacyUser?.photo_url || null,
         status: (profile as any)?.status || 'offline',
         created_at: profile?.created_at || legacyUser?.created_at || new Date().toISOString(),

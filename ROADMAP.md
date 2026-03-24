@@ -50,11 +50,21 @@
 - Show live label with current value next to slider
 - Tap-on-map to set coordinates already works; this polishes the last rough edge
 
+### 1.6 Senior Tracking Logic & Heartbeat (Completed 🏆)
+- [x] **iSharing-style Trip Detection:** Radius-based dwell detection (50m/5min) to eliminate GPS jitter and identify "Stays" vs "Trips".
+- [x] **Always-On Background Tracking:** Removed confusing "Live Share" toggle; background tracking starts automatically on login for Web/Android.
+- [x] **Real-time Heartbeat:** Dashboard now logs all incoming member updates; marker status "Just Now" is accurate.
+- [x] **Status Timestamp Sync:** Updating status to `online/idle` now refreshes the `updated_at` timestamp consistently across Web/Android.
+
 ### DB Migration Required
 ```sql
 ALTER TABLE latest_locations
   ADD COLUMN IF NOT EXISTS battery_level SMALLINT DEFAULT NULL;
 COMMENT ON COLUMN latest_locations.battery_level IS 'Device battery percentage 0–100';
+
+-- New Requirement: profiles.updated_at must be refreshed on every status heartbeat
+ALTER TABLE profiles
+  ALTER COLUMN updated_at SET DEFAULT now();
 ```
 
 ---

@@ -32,6 +32,7 @@ export function useRealtimeProfiles(
               display_name: string;
               avatar_url: string | null;
               status: 'online' | 'idle' | 'offline';
+              updated_at: string;
             };
             
             // Check if this profile belongs to one of our family members
@@ -41,6 +42,7 @@ export function useRealtimeProfiles(
                 display_name: record.display_name,
                 avatar_url: record.avatar_url,
                 status: record.status,
+                updated_at: record.updated_at,
               });
             }
           } catch (err) {

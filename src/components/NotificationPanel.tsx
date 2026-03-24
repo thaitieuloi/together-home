@@ -16,6 +16,7 @@ interface Props {
   onDelete: (id: string) => void;
   onClearAllRead: () => void;
   onClose: () => void;
+  isHistoryOpen?: boolean;
 }
 
 export default function NotificationPanel({
@@ -25,6 +26,7 @@ export default function NotificationPanel({
   onDelete,
   onClearAllRead,
   onClose,
+  isHistoryOpen,
 }: Props) {
   const [filter, setFilter] = useState<FilterType>('all');
 
@@ -42,7 +44,10 @@ export default function NotificationPanel({
   ];
 
   return (
-    <div className="absolute top-16 right-4 z-[1001] w-[calc(100vw-2rem)] sm:w-80 glass glass-dark rounded-2xl shadow-2xl overflow-hidden">
+    <div className={cn(
+      "absolute top-16 z-[1001] w-[calc(100vw-2rem)] sm:w-80 glass glass-dark rounded-2xl shadow-2xl overflow-hidden transition-all duration-500 ease-in-out",
+      isHistoryOpen ? "sm:right-[444px]" : "sm:right-4"
+    )}>
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border/50">
         <div className="flex items-center gap-2">

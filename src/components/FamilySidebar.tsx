@@ -148,6 +148,7 @@ interface Props {
   liveSharingUserIds?: Set<string>;
   onMemberRemoved?: () => void;
   activeSOSUserIds?: Set<string>;
+  selectedMemberId?: string;
 }
 
 export default function FamilySidebar({
@@ -162,6 +163,7 @@ export default function FamilySidebar({
   liveSharingUserIds = new Set(),
   onMemberRemoved,
   activeSOSUserIds = new Set(),
+  selectedMemberId,
 }: Props) {
   const { user } = useAuth();
   const { language } = useLanguage();
@@ -311,10 +313,12 @@ export default function FamilySidebar({
                     <button
                       onClick={() => onMemberClick(m)}
                       className={cn(
-                        "w-full flex items-center gap-4 p-3.5 rounded-2xl transition-all duration-300 text-left border border-transparent shadow-sm",
-                        isSOS 
-                          ? "bg-destructive/10 border-destructive/30" 
-                          : "hover:bg-white/40 dark:hover:bg-white/5 hover:border-white/20 active:scale-[0.98] bg-white/10 dark:bg-white-[0.02]"
+                        "w-full flex items-center gap-4 p-3.5 rounded-2xl transition-all duration-500 text-left border shadow-sm",
+                        selectedMemberId === m.user_id
+                          ? "bg-primary/5 border-primary shadow-[0_0_20px_rgba(59,130,246,0.15)] ring-2 ring-primary/20"
+                          : isSOS 
+                            ? "bg-destructive/10 border-destructive/30" 
+                            : "hover:bg-white/40 dark:hover:bg-white/5 hover:border-white/20 border-transparent active:scale-[0.98] bg-white/10 dark:bg-white-[0.02]"
                       )}
                     >
                       {/* Avatar with Status */}

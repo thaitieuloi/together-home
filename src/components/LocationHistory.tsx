@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   History, X, Loader2, Navigation, MapPin, Clock, Play, Pause,
   FastForward, Calendar, Trash2, Car, Bike, Footprints, Route,
-  ChevronDown,
+  ChevronDown, Info, PlayCircle, PauseCircle, ChevronRight,
+  Activity, Gauge, Map as MapIcon, CircleDot, RefreshCw,
+  Search, Info as InfoIcon, MoreHorizontal, SkipForward
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
@@ -97,13 +99,23 @@ const TEXT = {
 
 // ─── Activity icon ────────────────────────────────────────────────────────────
 
-function ActivityIcon({ avgSpeedMs, className }: { avgSpeedMs: number; className?: string }) {
-  const type = getActivityType(avgSpeedMs);
+function ActivityIcon({ avgSpeedKmh, className }: { avgSpeedKmh: number; className?: string }) {
+  const type = getActivityType(avgSpeedKmh);
   const iconClass = cn('w-4 h-4', className);
-  if (type === 'driving')  return <Car className={iconClass} />;
-  if (type === 'cycling')  return <Bike className={iconClass} />;
-  if (type === 'walking')  return <Footprints className={iconClass} />;
-  return <MapPin className={iconClass} />;
+  
+  const config = {
+    driving: { icon: Car, color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
+    cycling: { icon: Bike, color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' },
+    walking: { icon: Footprints, color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' }
+  };
+  
+  const { icon: Icon, color } = config[type] || { icon: MapPin, color: 'text-slate-500 bg-slate-500/10 border-slate-500/20' };
+  
+  return (
+    <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center transition-all shadow-sm border', color)}>
+      <Icon className={iconClass} />
+    </div>
+  );
 }
 
 // ─── Day group helper ─────────────────────────────────────────────────────────
@@ -205,6 +217,7 @@ export default function LocationHistory({
       segmentRefs.current[activeSeg.startTime]?.scrollIntoView({
         behavior: 'smooth',
         block: 'nearest',
+        inline: 'start',
       });
     }
   }, [playbackIndex, trail, trips]);
@@ -336,389 +349,409 @@ export default function LocationHistory({
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <Sheet open={true} onOpenChange={(open) => !open && onClose()}>
+    <Sheet open={true} onOpenChange={(open) => !open && onClose()} modal={false}>
       <SheetContent
         side="right"
-        className="p-0 w-full sm:max-w-md border-white/10 glass glass-dark flex flex-col z-[1002]"
+        hideOverlay
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="p-0 w-full sm:max-w-[420px] border-l border-border/40 glass-sidebar flex flex-col z-[1002] shadow-2xl overflow-hidden"
       >
         {/* ── Header ────────────────────────────────────────────────────────── */}
-        <SheetHeader className="p-5 pb-3 border-b border-white/5 bg-black/20 shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <SheetTitle className="text-lg font-black text-foreground uppercase tracking-tight flex items-center gap-2">
-              <History className="w-5 h-5 text-primary" />
-              {t.title}
-            </SheetTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full hover:bg-white/10"
-              onClick={onClose}
-            >
-              <X className="w-4 h-4" />
-            </Button>
+        <div className="relative shrink-0 overflow-hidden pt-6 pb-4 px-6 border-b border-border/40 bg-background/50 backdrop-blur-md">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-[60px] rounded-full -mr-10 -mt-10" />
+          
+          <div className="flex items-center justify-between mb-5 relative z-10">
+            <div className="space-y-0.5">
+              <h3 className="text-xl font-black text-foreground uppercase tracking-tight flex items-center gap-2.5">
+                <div className="p-2 bg-primary/10 rounded-xl">
+                  <History className="w-5 h-5 text-primary" />
+                </div>
+                {t.title}
+              </h3>
+              <p className="text-[10px] text-muted-foreground/60 font-black tracking-widest uppercase opacity-60">
+                Timeline & Playback v2
+              </p>
+            </div>
+            <div className="flex-1" /> {/* Spacer if needed */}
           </div>
 
-          {/* Member + refresh */}
-          <div className="grid grid-cols-[1fr_auto] gap-2 mb-2">
-            <Select value={selectedMember} onValueChange={setSelectedMember}>
-              <SelectTrigger className="h-10 glass glass-light border-none font-semibold text-sm focus:ring-0">
-                <SelectValue placeholder={t.pickMember} />
-              </SelectTrigger>
-              <SelectContent className="glass glass-dark border-white/10">
-                {members.map((m) => (
-                  <SelectItem key={m.user_id} value={m.user_id} className="text-sm">
-                    {m.profile.display_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              size="icon"
-              variant="secondary"
-              className="h-10 w-10 glass glass-light hover:bg-primary/20 hover:text-primary transition-all active:scale-95"
-              onClick={loadHistory}
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <History className="w-4 h-4" />}
-            </Button>
-          </div>
+          <div className="space-y-4 relative z-10">
+            {/* Member Select */}
+            <div className="relative group">
+              <Select value={selectedMember} onValueChange={setSelectedMember}>
+                <SelectTrigger className="h-12 bg-black/5 dark:bg-white/5 border-border/20 rounded-2xl font-bold text-sm focus:ring-0 transition-all hover:bg-black/10 dark:hover:bg-white/10 text-foreground pl-11">
+                  <div className="absolute left-3.5 p-1.5 bg-black/5 dark:bg-white/5 rounded-lg group-hover:scale-110 transition-transform">
+                    <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                  </div>
+                  <SelectValue placeholder={t.pickMember} />
+                </SelectTrigger>
+                <SelectContent className="glass glass-sidebar border-border/40 rounded-2xl p-1 z-[1003]">
+                  {members.map((m) => (
+                    <SelectItem key={m.user_id} value={m.user_id} className="text-sm rounded-xl py-2.5 focus:bg-primary/10 cursor-pointer">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn(
+                          "w-2.5 h-2.5 rounded-full border border-background shadow-sm", 
+                          m.profile.status === 'online' ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 
+                          m.profile.status === 'idle' ? 'bg-amber-500 ring-2 ring-amber-500/20' : 
+                          'bg-slate-400'
+                        )} />
+                        <span className="font-bold">{m.profile.display_name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Time range filter — horizontal scroll on small viewports */}
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-            {ranges.map((r) => (
+            {/* Time filters */}
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 -mx-6 px-6">
               <Button
-                key={r.value}
+                size="icon"
                 variant="ghost"
-                size="sm"
                 className={cn(
-                  'h-7 px-2.5 text-[11px] font-black rounded-lg whitespace-nowrap shrink-0 transition-all',
-                  selectedRange === r.value
-                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                    : 'glass glass-light text-foreground/60 hover:text-foreground'
+                  "h-8 w-8 rounded-xl shrink-0 transition-all",
+                  loading ? "bg-primary/10 text-primary" : "bg-black/5 dark:bg-white/5 text-muted-foreground hover:text-foreground hover:bg-black/10"
                 )}
-                onClick={() => setSelectedRange(r.value)}
+                onClick={loadHistory}
+                disabled={loading}
               >
-                {r.label}
+                <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
               </Button>
-            ))}
+              <div className="w-px h-6 bg-border/20 self-center mx-1 shrink-0" />
+              {ranges.map((r) => (
+                <button
+                  key={r.value}
+                  onClick={() => setSelectedRange(r.value)}
+                  className={cn(
+                    'h-8 px-4 text-[11px] font-black rounded-xl whitespace-nowrap shrink-0 transition-all uppercase tracking-wider border',
+                    selectedRange === r.value
+                      ? 'bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105'
+                      : 'bg-black/5 dark:bg-white/5 border-transparent text-muted-foreground/60 hover:text-foreground hover:bg-black/10'
+                  )}
+                >
+                  {r.label}
+                </button>
+              ))}
+              <div className="w-4 shrink-0" /> {/* Spacer to prevent right clipping */}
+            </div>
           </div>
-        </SheetHeader>
+        </div>
 
         {/* ── Content ───────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+        <div className="flex-1 overflow-hidden relative flex flex-col min-h-0 bg-black/[0.02] dark:bg-white/[0.02]">
           {loading ? (
             <div className="flex-1 flex flex-col items-center justify-center space-y-4">
               <div className="relative">
-                <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                <div className="w-16 h-16 rounded-full border-[3px] border-primary/10 border-t-primary animate-spin" />
                 <History className="absolute inset-0 m-auto w-6 h-6 text-primary animate-pulse" />
               </div>
-              <p className="text-sm font-bold text-muted-foreground animate-pulse">{t.loading}</p>
+              <p className="text-[12px] font-black text-primary uppercase tracking-[0.2em] animate-pulse">{t.loading}</p>
             </div>
           ) : trail.length === 0 ? (
-            /* ── Empty state ─────────────────────────────────────────────────── */
             <div className="flex-1 p-12 flex flex-col items-center justify-center text-center">
-              <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center mb-6 relative">
-                <MapPin className="w-12 h-12 text-muted-foreground/20" />
-                <div className="absolute -top-1 -right-1 w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center border border-destructive/20">
+              <div className="w-24 h-24 rounded-[32px] bg-black/[0.03] dark:bg-white/[0.03] border border-border/20 flex items-center justify-center mb-8 relative rotate-12">
+                <MapPin className="w-10 h-10 text-muted-foreground/30 -rotate-12" />
+                <div className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center border border-destructive/20 shadow-xl">
                   <Trash2 className="w-4 h-4 text-destructive" />
                 </div>
               </div>
-              <h4 className="text-xl font-black text-foreground mb-2 uppercase tracking-tight">
+              <h4 className="text-2xl font-black text-foreground mb-3 uppercase tracking-tight">
                 {t.noData}
               </h4>
-              <p className="text-sm text-muted-foreground font-medium max-w-[240px] mb-6">
+              <p className="text-sm text-muted-foreground/60 font-medium max-w-[260px] mb-8 leading-relaxed">
                 {t.noDataDesc}
               </p>
-              <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 flex gap-3 text-left">
-                <InfoIcon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                <p className="text-xs text-primary/80 font-semibold">{t.suggestRange}</p>
+              <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 flex gap-3 text-left max-w-xs transition-all hover:bg-primary/10">
+                <div className="p-1.5 bg-primary/20 rounded-lg shrink-0">
+                  <InfoIcon className="w-4 h-4 text-primary" />
+                </div>
+                <p className="text-[11px] text-primary/80 font-bold uppercase tracking-tight leading-normal">{t.suggestRange}</p>
               </div>
             </div>
           ) : (
-            /* ── Trip list ───────────────────────────────────────────────────── */
-            <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef as any}>
-              <div className="px-4 pt-3 pb-24 space-y-5">
-                {dayGroups.map((group) => (
-                  <div key={group.dateKey}>
-                    {/* Day header */}
-                    <div className="sticky top-0 z-10 py-2 mb-3 bg-background/80 backdrop-blur-sm">
-                      <div className="flex items-center gap-3 mb-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span className="text-xs font-black uppercase tracking-widest text-primary">
-                          {group.dateLabel}
-                        </span>
-                        <div className="flex-1 h-px bg-white/5" />
-                      </div>
-                      {/* Day summary pills */}
-                      <div className="flex gap-2 flex-wrap pl-6">
-                        {group.tripCount > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black text-primary">
-                            <Route className="w-3 h-3" />
-                            {group.totalDistM >= 1000
-                              ? `${(group.totalDistM / 1000).toFixed(1)} km`
-                              : `${group.totalDistM} m`}
+            <>
+              {/* ── Trip list ───────────────────────────────────────────────────── */}
+              <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef as any}>
+                <div className="px-5 pt-6 pb-40 space-y-8">
+                  {dayGroups.map((group) => (
+                    <div key={group.dateKey} className="relative">
+                      {/* Day header */}
+                      <div className="sticky top-0 z-20 -mx-5 px-5 py-3 mb-6 bg-background/80 backdrop-blur-md border-y border-border/20 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Calendar className="w-4 h-4 text-primary" />
+                          </div>
+                          <span className="text-sm font-black uppercase tracking-[0.15em] text-foreground">
+                            {group.dateLabel}
                           </span>
-                        )}
-                        {group.tripCount > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-black text-muted-foreground">
-                            <Navigation className="w-3 h-3" />
-                            {group.tripCount} {t.trips}
-                          </span>
-                        )}
-                        {group.stayCount > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-[10px] font-black text-orange-400">
-                            <MapPin className="w-3 h-3" />
-                            {group.stayCount} {t.stops}
-                          </span>
-                        )}
-                        {group.totalMovingMin > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-black text-muted-foreground">
-                            <Clock className="w-3 h-3" />
-                            {group.totalMovingMin >= 60
-                              ? `${Math.floor(group.totalMovingMin / 60)}g${group.totalMovingMin % 60}p`
-                              : `${group.totalMovingMin} phút`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Segment cards */}
-                    <div className="relative space-y-3">
-                      {/* Timeline vertical line */}
-                      <div className="absolute left-[17px] top-2 bottom-2 w-[2px] bg-gradient-to-b from-primary/40 via-primary/10 to-transparent z-0 pointer-events-none" />
-
-                      {group.segments.map((seg, i) => {
-                        const active = isSegmentActive(seg);
-                        const isTrip = seg.type === 'trip';
-                        const actType = isTrip ? getActivityType(seg.avgSpeed ?? 0) : 'stationary';
-                        const address = !isTrip ? getAddress(seg) : null;
-                        const addrLoaded = !isTrip ? isAddressLoaded(seg) : true;
-
-                        return (
-                          <div
-                            key={seg.startTime}
-                            ref={(el) => { segmentRefs.current[seg.startTime] = el; }}
-                            className={cn(
-                              'relative z-10 grid grid-cols-[36px_1fr] gap-3 group cursor-pointer',
-                              'animate-in fade-in slide-in-from-right-4 duration-300 fill-mode-both'
-                            )}
-                            style={{ animationDelay: `${i * 40}ms` }}
-                            onClick={() => handleSegmentClick(seg)}
-                          >
-                            {/* Icon */}
-                            <div className="flex flex-col items-center pt-0.5">
-                              <div
-                                className={cn(
-                                  'w-8 h-8 rounded-xl flex items-center justify-center border transition-all shadow-md',
-                                  isTrip
-                                    ? 'bg-primary/20 border-primary/30 text-primary shadow-primary/10'
-                                    : 'bg-orange-500/20 border-orange-500/30 text-orange-400 shadow-orange-500/10',
-                                  active && 'scale-110 ring-2 ring-offset-1 ring-offset-background',
-                                  active && (isTrip ? 'ring-primary' : 'ring-orange-500')
-                                )}
-                              >
-                                {isTrip
-                                  ? <ActivityIcon avgSpeedMs={seg.avgSpeed ?? 0} />
-                                  : <MapPin className="w-4 h-4" />
-                                }
-                              </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          {group.tripCount > 0 && (
+                            <div className="bg-black/5 dark:bg-white/5 rounded-lg px-2 py-1 flex items-center gap-1.5 border border-border/40">
+                              <Navigation className="w-3 h-3 text-primary" />
+                              <span className="text-[10px] font-black text-foreground">{group.tripCount}</span>
                             </div>
+                          )}
+                          {group.stayCount > 0 && (
+                            <div className="bg-black/5 dark:bg-white/5 rounded-lg px-2 py-1 flex items-center gap-1.5 border border-border/40">
+                              <MapPin className="w-3 h-3 text-orange-400" />
+                              <span className="text-[10px] font-black text-foreground">{group.stayCount}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
-                            {/* Card */}
+                      {/* Segment cards */}
+                      <div className="relative space-y-4 pl-4">
+                        {/* Bolder timeline track */}
+                        <div className="absolute left-[13px] top-6 bottom-6 w-0.5 bg-gradient-to-b from-primary/30 via-border/20 to-transparent z-0 pointer-events-none rounded-full" />
+
+                        {group.segments.map((seg, i) => {
+                          const active = isSegmentActive(seg);
+                          const isTrip = seg.type === 'trip';
+                          const address = !isTrip ? getAddress(seg) : null;
+                          const addrLoaded = !isTrip ? isAddressLoaded(seg) : true;
+
+                          return (
                             <div
+                              key={seg.startTime}
+                              ref={(el) => { segmentRefs.current[seg.startTime] = el; }}
                               className={cn(
-                                'rounded-2xl p-3.5 border transition-all duration-200',
-                                'glass glass-light border-white/5',
-                                'group-hover:bg-white/10 group-hover:border-white/10 group-hover:translate-x-0.5',
-                                active && 'bg-primary/10 border-primary/25 ring-1 ring-primary/30'
+                                'relative z-10 grid grid-cols-[28px_1fr] gap-4 group cursor-pointer transition-all duration-500',
+                                active ? 'scale-100 opacity-100' : 'hover:translate-x-1'
                               )}
+                              onClick={() => handleSegmentClick(seg)}
                             >
-                              {/* Top row: badge + time + duration */}
-                              <div className="flex items-start justify-between gap-2 mb-2">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        'text-[9px] uppercase font-black px-1.5 h-4 rounded-md shrink-0',
-                                        isTrip
-                                          ? 'bg-primary/20 text-primary border-primary/30'
-                                          : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-                                      )}
-                                    >
-                                      {isTrip ? t.trip : t.stay}
-                                    </Badge>
-                                    <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">
-                                      {format(new Date(seg.startTime), 'HH:mm')}
-                                      {' — '}
-                                      {format(new Date(seg.endTime), 'HH:mm')}
-                                    </span>
+                              {/* Icon Column */}
+                              <div className="flex flex-col items-center pt-2">
+                                <div className={cn(
+                                  "w-6 h-6 rounded-full border-2 border-background z-10 shadow-lg flex items-center justify-center transition-all duration-300",
+                                  active ? (isTrip ? "bg-primary scale-125 ring-4 ring-primary/20" : "bg-orange-500 scale-125 ring-4 ring-orange-500/20") 
+                                         : (isTrip ? "bg-primary/40" : "bg-orange-400/40")
+                                )}>
+                                  {isTrip ? <Route className="w-3 h-3 text-white" /> : <CircleDot className="w-3 h-3 text-white" />}
+                                </div>
+                              </div>
+
+                              {/* Card Body */}
+                              <div className={cn(
+                                'rounded-2xl p-4 transition-all duration-300 relative overflow-hidden',
+                                'border backdrop-blur-xl',
+                                active 
+                                  ? 'bg-primary/10 border-primary/40' 
+                                  : 'bg-black/[0.03] dark:bg-white/[0.04] border-black/5 dark:border-white/10 hover:bg-black/[0.06] dark:hover:bg-white/[0.08]'
+                              )}>
+                                {/* Glowing stripe for active */}
+                                {active && (
+                                  <div className={cn(
+                                    "absolute top-0 left-0 bottom-0 w-1",
+                                    isTrip ? "bg-primary shadow-[2px_0_15px_rgba(59,130,246,0.6)]" : "bg-orange-500 shadow-[2px_0_15px_rgba(249,115,22,0.6)]"
+                                  )} />
+                                )}
+
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          'text-[9px] uppercase font-black px-2 h-4.5 rounded-full border-0 tracking-widest shadow-sm',
+                                          isTrip ? 'bg-primary/20 text-primary' : 'bg-orange-500/20 text-orange-600'
+                                        )}
+                                      >
+                                        {isTrip ? t.trip : t.stay}
+                                      </Badge>
+                                      <div className="flex items-center gap-1.5 text-muted-foreground/80">
+                                        <Clock className="w-3 h-3" />
+                                        <span className="text-[10px] font-black tabular-nums text-muted-foreground">
+                                          {format(new Date(seg.startTime), 'HH:mm')}
+                                          <span className="mx-1 opacity-30">—</span>
+                                          {format(new Date(seg.endTime), 'HH:mm')}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {isTrip ? (
+                                      <div className="flex items-center gap-3">
+                                        <ActivityIcon avgSpeedKmh={seg.avgSpeed ?? 0} />
+                                        <p className="text-sm font-black text-foreground tracking-tight leading-tight">
+                                          {getActivityLabel(getActivityType(seg.avgSpeed ?? 0), language)}
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      <div className="flex gap-3 items-start">
+                                        <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 shadow-inner">
+                                          <MapPin className="w-4 h-4 text-orange-500" />
+                                        </div>
+                                        <p className={cn(
+                                          'text-sm font-bold leading-relaxed line-clamp-2',
+                                          addrLoaded ? 'text-foreground' : 'text-foreground/20 animate-pulse'
+                                        )}>
+                                          {address}
+                                        </p>
+                                      </div>
+                                    )}
                                   </div>
 
-                                  {/* Main label: activity type OR address */}
-                                  {isTrip ? (
-                                    <p className="text-sm font-bold text-foreground tracking-tight truncate">
-                                      {getActivityLabel(seg.avgSpeed ?? 0, language)}
-                                    </p>
-                                  ) : (
-                                    <p
-                                      className={cn(
-                                        'text-sm font-bold leading-snug line-clamp-2',
-                                        addrLoaded ? 'text-foreground' : 'text-muted-foreground/50 animate-pulse'
-                                      )}
-                                    >
-                                      {address}
-                                    </p>
-                                  )}
+                                  <div className="flex flex-col items-end shrink-0 pt-0.5">
+                                    <span className="text-base font-black text-foreground block tracking-tighter tabular-nums">
+                                      {seg.durationMinutes >= 60
+                                        ? `${Math.floor(seg.durationMinutes / 60)}h${seg.durationMinutes % 60}m`
+                                        : `${seg.durationMinutes}m`}
+                                    </span>
+                                    {isTrip && (
+                                      <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-tighter">
+                                        {((seg.distance ?? 0) >= 1000) ? `${((seg.distance ?? 0) / 1000).toFixed(1)} km` : `${seg.distance} m`}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
-                                {/* Duration */}
-                                <div className="text-right shrink-0">
-                                  <span className="text-sm font-black text-foreground block leading-none tabular-nums">
-                                    {seg.durationMinutes >= 60
-                                      ? `${Math.floor(seg.durationMinutes / 60)}h${seg.durationMinutes % 60}m`
-                                      : `${seg.durationMinutes}m`}
-                                  </span>
-                                </div>
+                                {isTrip && (
+                                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-border/10">
+                                    <div className="flex items-center gap-2 bg-black/[0.02] dark:bg-white/[0.03] p-2 rounded-xl">
+                                      <div className="p-1.5 bg-blue-500/10 rounded-lg">
+                                        <Gauge className="w-3.5 h-3.5 text-blue-500" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <span className="block text-[8px] font-black text-muted-foreground/60 uppercase tracking-widest leading-none mb-1">{t.avgSpeed}</span>
+                                        <span className="block text-[11px] font-black text-foreground tabular-nums leading-none">{Math.round(seg.avgSpeed ?? 0)} <span className="text-[8px] opacity-40">KM/H</span></span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-black/[0.02] dark:bg-white/[0.03] p-2 rounded-xl">
+                                      <div className="p-1.5 bg-purple-500/10 rounded-lg">
+                                        <Activity className="w-3.5 h-3.5 text-purple-500" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <span className="block text-[8px] font-black text-muted-foreground/60 uppercase tracking-widest leading-none mb-1">{t.maxSpeed}</span>
+                                        <span className="block text-[11px] font-black text-foreground tabular-nums leading-none">{Math.round(seg.maxSpeed ?? 0)} <span className="text-[8px] opacity-40">KM/H</span></span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-
-                              {/* Trip stats */}
-                              {isTrip && (
-                                <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-white/5">
-                                  <StatCell
-                                    label={t.distance}
-                                    value={
-                                      (seg.distance ?? 0) >= 1000
-                                        ? `${((seg.distance ?? 0) / 1000).toFixed(1)} km`
-                                        : `${seg.distance ?? 0} m`
-                                    }
-                                  />
-                                  <StatCell
-                                    label={t.avgSpeed}
-                                    value={`${Math.round((seg.avgSpeed ?? 0) * 3.6)} km/h`}
-                                  />
-                                  <StatCell
-                                    label={t.maxSpeed}
-                                    value={`${Math.round((seg.maxSpeed ?? 0) * 3.6)} km/h`}
-                                  />
-                                </div>
-                              )}
                             </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+
+              {/* ── Playback Controls: Dynamic Island Style ───────────────────────── */}
+              {trail.length > 0 && !loading && (
+                <div className="absolute bottom-8 left-6 right-6 z-40 animate-in slide-in-from-bottom-6 duration-700">
+                  <div className="bg-background/95 dark:bg-[#1A1C1E]/95 backdrop-blur-2xl border border-border/40 rounded-[28px] p-5 shadow-[0_25px_60px_rgba(0,0,0,0.15)]">
+                    <div className="flex flex-col gap-4">
+                      {/* Info Header */}
+                      <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-primary/10 rounded-xl animate-pulse">
+                            <Navigation className="w-4 h-4 text-primary" />
                           </div>
-                        );
-                      })}
+                          <div className="flex flex-col">
+                            <span className="text-[13px] font-black text-foreground tabular-nums tracking-tight">
+                              {currentTimestamp ? format(new Date(currentTimestamp), 'HH:mm:ss') : '--:--:--'}
+                            </span>
+                            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none">
+                              {currentTimestamp ? format(new Date(currentTimestamp), 'dd/MM/yyyy') : 'Timeline'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-3 text-[10px] font-black bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 rounded-xl flex items-center gap-2 text-foreground border border-border/20 transition-all active:scale-95"
+                            onClick={nextPlaybackSpeed}
+                          >
+                            <span className="text-primary font-black uppercase text-[9px] tracking-widest">{playbackSpeed}X</span>
+                            <SkipForward className="w-3.5 h-3.5 fill-current text-primary" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Player & Slider */}
+                      <div className="flex items-center gap-4">
+                        <Button
+                          size="icon"
+                          className={cn(
+                            "h-12 w-12 rounded-2xl shrink-0 transition-all active:scale-90",
+                            isPlaying 
+                              ? "bg-primary shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:bg-primary/90 text-white" 
+                              : "bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-foreground"
+                          )}
+                          onClick={togglePlayback}
+                        >
+                          {isPlaying
+                            ? <PauseCircle className="w-7 h-7" />
+                            : <PlayCircle className="w-7 h-7 ml-0.5" />
+                          }
+                        </Button>
+
+                        <div className="flex-1 px-1 group">
+                          <input
+                            type="range"
+                            min="0"
+                            max={trail.length - 1}
+                            value={playbackIndex === -1 ? trail.length - 1 : playbackIndex}
+                            onChange={(e) => handleSeek(parseInt(e.target.value))}
+                            className="w-full h-2 bg-black/10 dark:bg-white/10 rounded-full appearance-none cursor-pointer accent-primary slider-custom transition-all group-hover:h-3"
+                            dir="rtl"
+                          />
+                          <div className="flex justify-between mt-2.5 px-0.5">
+                            <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">{t.trip} Start</span>
+                            <div className="flex gap-1.5 items-center">
+                              <div className={cn("w-1 h-1 rounded-full", isPlaying ? "bg-primary animate-ping" : "bg-black/20 dark:bg-white/20")} />
+                              <span className="text-[8px] font-black text-primary/60 uppercase tracking-widest">Live View</span>
+                            </div>
+                            <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">{t.today}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </ScrollArea>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* ── Playback bar ─────────────────────────────────────────────────── */}
-        {trail.length > 0 && (
-          <div className="shrink-0 px-5 py-4 bg-black/50 backdrop-blur-xl border-t border-white/10 space-y-3">
-            {/* Timestamp row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-primary" />
-                <span className="text-sm font-black text-foreground tabular-nums tracking-tight">
-                  {currentTimestamp
-                    ? format(new Date(currentTimestamp), 'HH:mm:ss')
-                    : '--:--:--'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-3 h-3 text-muted-foreground" />
-                <span className="text-[11px] font-bold text-muted-foreground">
-                  {currentTimestamp
-                    ? format(new Date(currentTimestamp), 'dd/MM/yyyy')
-                    : '--/--/----'}
-                </span>
-              </div>
-            </div>
-
-            {/* Controls row */}
-            <div className="flex items-center gap-3">
-              <Button
-                size="icon"
-                className={cn(
-                  'h-11 w-11 rounded-full shadow-xl transition-all transform active:scale-90 shrink-0',
-                  isPlaying
-                    ? 'bg-secondary hover:bg-secondary/80 text-secondary-foreground'
-                    : 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/30'
-                )}
-                onClick={togglePlayback}
-              >
-                {isPlaying
-                  ? <Pause className="w-4 h-4 fill-current" />
-                  : <Play className="w-4 h-4 fill-current ml-0.5" />
-                }
-              </Button>
-
-              <div className="flex-1 flex flex-col gap-1.5">
-                <input
-                  type="range"
-                  min="0"
-                  max={trail.length - 1}
-                  value={playbackIndex === -1 ? trail.length - 1 : playbackIndex}
-                  onChange={(e) => handleSeek(parseInt(e.target.value))}
-                  className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary slider-thumb"
-                  dir="rtl"
-                />
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-widest leading-none">
-                    Timeline
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 px-2 text-[10px] font-black bg-white/5 hover:bg-white/10 rounded-md ring-1 ring-white/10 flex items-center gap-1"
-                    onClick={nextPlaybackSpeed}
-                  >
-                    {playbackSpeed}X <FastForward className="w-3 h-3 fill-current" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <style dangerouslySetInnerHTML={{ __html: `
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+          .slider-custom { -webkit-appearance: none; appearance: none; background: rgba(0,0,0,0.05); }
+          .slider-custom::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 20px; height: 20px; background: #3B82F6; border-radius: 9px;
+            border: 3px solid #FFFFFF; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            cursor: pointer; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+          }
+          .slider-custom::-webkit-slider-thumb:hover { transform: scale(1.15); background: #2563EB; box-shadow: 0 6px 20px rgba(59,130,246,0.3); }
+          .slider-custom::-moz-range-thumb {
+            width: 20px; height: 20px; background: #3B82F6; border-radius: 9px;
+            border: 3px solid #FFFFFF; cursor: pointer; transition: all 0.2s;
+          }
+          .glass-sidebar { 
+            background: hsl(var(--background) / 0.8); 
+            backdrop-filter: blur(24px) saturate(1.5); 
+            -webkit-backdrop-filter: blur(24px) saturate(1.5); 
+          }
+        `}} />
       </SheetContent>
-
-      <style dangerouslySetInnerHTML={{ __html: `
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .slider-thumb { -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.1); cursor: pointer; }
-        .slider-thumb::-webkit-slider-thumb {
-          -webkit-appearance: none; appearance: none;
-          width: 14px; height: 14px; background: #6D28D9; border-radius: 50%;
-          border: 2px solid white; box-shadow: 0 0 12px rgba(109,40,217,0.5);
-          cursor: pointer; transition: all 0.15s;
-        }
-        .slider-thumb::-webkit-slider-thumb:hover { transform: scale(1.3); box-shadow: 0 0 18px rgba(109,40,217,0.7); }
-      `}} />
     </Sheet>
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
 function StatCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="space-y-0.5">
-      <span className="text-[9px] text-muted-foreground uppercase font-black tracking-widest block">{label}</span>
-      <p className="text-[11px] font-bold text-foreground">{value}</p>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[8px] text-muted-foreground uppercase font-black tracking-widest block opacity-70">{label}</span>
+      <p className="text-[11px] font-black text-foreground tabular-nums">{value}</p>
     </div>
-  );
-}
-
-function InfoIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 16v-4" />
-      <path d="M12 8h.01" />
-    </svg>
   );
 }

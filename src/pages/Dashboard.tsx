@@ -17,7 +17,7 @@ import FamilyChat from '@/components/FamilyChat';
 import MemberActionSheet from '@/components/MemberActionSheet';
 import Onboarding from '@/components/Onboarding';
 import FamilySetup from '@/pages/FamilySetup';
-import LiveLocationToggle from '@/components/LiveLocationToggle';
+// Removed LiveLocationToggle as background tracking is always active
 import FamilyAdmin from '@/components/FamilyAdmin';
 import { FamilyMemberWithProfile } from '@/hooks/useFamily';
 import { Tables } from '@/integrations/supabase/types';
@@ -106,8 +106,8 @@ export default function Dashboard() {
     deleteNotification,
     clearAllRead,
   } = useNotifications();
-  const { sessions, mySession, startSharing, stopSharing, isSharing } = useLiveLocationSharing(family?.id);
-  const liveSharingUserIds = useMemo(() => new Set(sessions.map((s) => s.user_id)), [sessions]);
+  // Removed high-frequency live sessions to avoid confusion; constant background tracking is always active
+  const liveSharingUserIds = useMemo(() => new Set<string>(), []);
 
   const handleRealtimeLocation = useCallback(
     (
@@ -120,6 +120,20 @@ export default function Dashboard() {
       isMoving?: boolean | null,
       batteryLevel?: number | null
     ) => {
+      // Log for Debug Tracking Panel visibility
+      const member = members.find(m => m.user_id === userId);
+      const name = member?.profile.display_name || userId;
+      console.info(`[LocationTracking] Realtime update from ${name}`, {
+        userId,
+        lat,
+        lng,
+        accuracy,
+        speed,
+        isMoving,
+        batteryLevel,
+        updatedAt
+      });
+
       updateMemberLocation(userId, lat, lng, accuracy, updatedAt, speed, isMoving, batteryLevel);
       setRecentlyUpdated((prev) => new Set(prev).add(userId));
       setTimeout(() => {
@@ -130,7 +144,7 @@ export default function Dashboard() {
         });
       }, 2000);
     },
-    [updateMemberLocation]
+    [updateMemberLocation, members]
   );
 
   useRealtimeLocations(members, handleRealtimeLocation);
@@ -139,9 +153,20 @@ export default function Dashboard() {
   const { unreadCount } = useUnreadMessages(family?.id, showChat);
 
   const handleMemberClick = (member: FamilyMemberWithProfile) => {
+    const isSameMember = selectedMember?.user_id === member.user_id;
+    
     setSelectedMember(member);
     setShowMemberSheet(true);
     setMobileOpen(false);
+
+    if (!isSameMember) {
+      // Only close everything if switching to a DIFFERENT member
+      setShowChat(false);
+      setShowNotifications(false);
+      setShowGeofences(false);
+      setShowDebug(false);
+      handleCloseHistory();
+    }
   };
 
   const handleFlyToMember = (member: FamilyMemberWithProfile) => {
@@ -152,13 +177,13 @@ export default function Dashboard() {
 
   const handleMessageMember = (_member: FamilyMemberWithProfile) => {
     setShowChat(true);
-    setShowMemberSheet(false);
+    // Keep the action sheet open so user can perform other actions for the SAME member
   };
 
   const handleShowMemberHistory = (member: FamilyMemberWithProfile) => {
     setSelectedMemberForHistoryId(member.user_id);
     setShowHistory(true);
-    setShowMemberSheet(false);
+    // Keep the action sheet open as per user request for "opening more"
     if (member.location) {
       setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
     }
@@ -211,7 +236,10 @@ export default function Dashboard() {
       try {
         await supabase
           .from('profiles')
-          .update({ status } as any)
+          .update({ 
+            status,
+            updated_at: new Date().toISOString()
+          } as any)
           .eq('user_id', user.id);
       } catch (err) {
         console.error('Failed to update status:', err);
@@ -248,7 +276,13 @@ export default function Dashboard() {
   const toggleNotifications = () => {
     setShowNotifications((prev) => {
       const next = !prev;
-      if (next) setShowChat(false);
+      if (next) {
+        setShowChat(false);
+        setShowMemberSheet(false);
+        setShowGeofences(false);
+        setShowDebug(false);
+        handleCloseHistory();
+      }
       return next;
     });
   };
@@ -258,6 +292,10 @@ export default function Dashboard() {
       const next = !prev;
       if (next) {
         setShowGeofences(false);
+        setShowMemberSheet(false);
+        setShowChat(false);
+        setShowNotifications(false);
+        setShowDebug(false);
       } else {
         setHistoryTrail([]);
       }
@@ -268,7 +306,13 @@ export default function Dashboard() {
   const toggleGeofences = () => {
     setShowGeofences((prev) => {
       const next = !prev;
-      if (next) setShowHistory(false);
+      if (next) {
+        setShowHistory(false);
+        setShowMemberSheet(false);
+        setShowChat(false);
+        setShowNotifications(false);
+        setShowDebug(false);
+      }
       return next;
     });
   };
@@ -276,7 +320,27 @@ export default function Dashboard() {
   const toggleChat = () => {
     setShowChat((prev) => {
       const next = !prev;
-      if (next) setShowNotifications(false);
+      if (next) {
+        setShowNotifications(false);
+        setShowMemberSheet(false);
+        setShowHistory(false);
+        setShowGeofences(false);
+        setShowDebug(false);
+      }
+      return next;
+    });
+  };
+
+  const toggleDebug = () => {
+    setShowDebug((prev) => {
+      const next = !prev;
+      if (next) {
+        setShowChat(false);
+        setShowNotifications(false);
+        setShowMemberSheet(false);
+        setShowHistory(false);
+        setShowGeofences(false);
+      }
       return next;
     });
   };
@@ -376,6 +440,7 @@ export default function Dashboard() {
           liveSharingUserIds={liveSharingUserIds}
           onMemberRemoved={refetch}
           activeSOSUserIds={activeSOSUserIds}
+          selectedMemberId={showMemberSheet ? selectedMember?.user_id : (showHistory ? selectedMemberForHistoryId : (showChat ? selectedMember?.user_id : undefined))}
         />
       </div>
 
@@ -409,13 +474,17 @@ export default function Dashboard() {
               liveSharingUserIds={liveSharingUserIds}
               onMemberRemoved={refetch}
               activeSOSUserIds={activeSOSUserIds}
+              selectedMemberId={showMemberSheet ? selectedMember?.user_id : (showHistory ? selectedMemberForHistoryId : (showChat ? selectedMember?.user_id : undefined))}
             />
           </SheetContent>
         </Sheet>
       </div>
 
       {/* Top-right controls (desktop) */}
-      <div className="absolute top-6 right-6 z-[1000] hidden md:flex flex-col gap-3">
+      <div className={cn(
+        "absolute top-6 z-[1000] hidden md:flex flex-col gap-3 transition-all duration-500 ease-in-out",
+        showHistory ? "right-[444px]" : "right-6"
+      )}>
         <div className="relative">
           <Button
             size="icon"
@@ -463,7 +532,7 @@ export default function Dashboard() {
             'shadow-2xl w-12 h-12 rounded-full transition-all duration-300 hover:scale-110 active:scale-95 border border-white/10',
             !showDebug ? 'glass glass-dark' : 'bg-primary border-primary shadow-primary/20'
           )}
-          onClick={() => setShowDebug(!showDebug)}
+          onClick={toggleDebug}
         >
           <Bug className="w-5 h-5" />
         </Button>
@@ -479,16 +548,12 @@ export default function Dashboard() {
             onDelete={deleteNotification}
             onClearAllRead={clearAllRead}
             onClose={handleClose}
+            isHistoryOpen={showHistory}
           />
         )}
       </AnimatedPanel>
 
-      {/* Live location toggle */}
-      <div className="absolute z-[1000] bottom-24 left-1/2 -translate-x-1/2 md:left-[calc(20rem+1rem)] md:bottom-6 md:translate-x-0">
-        <div className="bg-card/90 backdrop-blur-sm rounded-xl shadow-lg p-2 border border-border/50">
-          <LiveLocationToggle isSharing={isSharing} expiresAt={mySession?.expires_at} onStart={startSharing} onStop={stopSharing} />
-        </div>
-      </div>
+      {/* Removed high-frequency LiveLocationToggle to simplify data flow - background tracking is always active */}
 
       {/* Desktop bottom buttons */}
       <div className="absolute bottom-10 right-6 z-[1000] hidden md:flex flex-col gap-3 items-end">
@@ -543,7 +608,7 @@ export default function Dashboard() {
               </Badge>
             )}
           </Button>
-          <Button variant={showDebug ? 'default' : 'ghost'} className="h-10 rounded-xl" onClick={() => setShowDebug(!showDebug)}>
+          <Button variant={showDebug ? 'default' : 'ghost'} className="h-10 rounded-xl" onClick={toggleDebug}>
             <Bug className="w-4 h-4" />
           </Button>
         </div>
@@ -569,9 +634,8 @@ export default function Dashboard() {
         isSOS={selectedMember ? activeSOSUserIds.has(selectedMember.user_id) : false}
       />
 
-      {/* Chat */}
       <AnimatedPanel open={showChat} onClose={() => setShowChat(false)}>
-        {(handleClose) => <FamilyChat familyId={family.id} members={members} onClose={handleClose} />}
+        {(handleClose) => <FamilyChat familyId={family.id} members={members} onClose={handleClose} isHistoryOpen={showHistory} />}
       </AnimatedPanel>
 
       {/* Geofence manager */}

@@ -29,6 +29,7 @@ interface Props {
   members: FamilyMemberWithProfile[];
   onClose: () => void;
   onUnreadChange?: (count: number) => void;
+  isHistoryOpen?: boolean;
 }
 
 const CHAT_TEXT = {
@@ -63,7 +64,7 @@ const CHAT_TEXT = {
 const PAGE_SIZE = 40;
 const COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-orange-500', 'bg-violet-500', 'bg-pink-500', 'bg-teal-500'];
 
-export default function FamilyChat({ familyId, members, onClose, onUnreadChange }: Props) {
+export default function FamilyChat({ familyId, members, onClose, onUnreadChange, isHistoryOpen }: Props) {
   const { user } = useAuth();
   const { language } = useLanguage();
   const t = CHAT_TEXT[language];
@@ -331,7 +332,10 @@ export default function FamilyChat({ familyId, members, onClose, onUnreadChange 
   };
 
   return (
-    <div className="absolute bottom-20 left-2 right-2 md:left-auto md:right-20 z-[1000] md:w-80 h-[70vh] md:h-[28rem] glass glass-dark rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className={cn(
+      "absolute bottom-20 left-2 right-2 md:left-auto z-[1000] md:w-80 h-[70vh] md:h-[28rem] glass glass-dark rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-500 ease-in-out",
+      isHistoryOpen ? "md:right-[444px]" : "md:right-20"
+    )}>
       <div className="p-3 border-b border-border/50 flex items-center justify-between">
         <span className="font-semibold text-sm text-foreground">{t.title}</span>
         <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={onClose}>

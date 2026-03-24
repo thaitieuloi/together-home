@@ -21,8 +21,15 @@ export default function AnimatedPanel({ open, onClose, children, duration = 200 
     if (open) {
       setMounted(true);
       setAnimating(false);
+    } else if (mounted && !animating) {
+      // Trigger exit animation if open prop becomes false externally
+      setAnimating(true);
+      timerRef.current = setTimeout(() => {
+        setMounted(false);
+        setAnimating(false);
+      }, duration);
     }
-  }, [open]);
+  }, [open, mounted, animating, duration]);
 
   useEffect(() => {
     return () => clearTimeout(timerRef.current);
