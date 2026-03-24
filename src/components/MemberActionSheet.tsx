@@ -35,7 +35,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { reverseGeocode } from '@/lib/geocoding';
-import { MapPin } from 'lucide-react';
+import { MapPin, AlertTriangle } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Props {
   member: FamilyMemberWithProfile | null;
@@ -47,6 +48,7 @@ interface Props {
   onUpdate?: () => void;
   isAdmin?: boolean;
   isSOS?: boolean;
+  isDesktop?: boolean;
 }
 
 const TEXT = {
@@ -123,8 +125,10 @@ export default function MemberActionSheet({
   onUpdate,
   isAdmin,
   isSOS,
-  isDesktop = false,
+  isDesktop,
 }: Props) {
+  const isMobile = useIsMobile();
+  const effectiveIsDesktop = isDesktop !== undefined ? isDesktop : !isMobile;
   const { user } = useAuth();
   const { language } = useLanguage();
   const t = TEXT[language];
@@ -151,7 +155,7 @@ export default function MemberActionSheet({
     }
   }, [member?.user_id, member?.location?.latitude, member?.location?.longitude]);
 
-  if (!member || !user || (!open && isDesktop)) return null;
+  if (!member || !user || (!open && effectiveIsDesktop)) return null;
 
   const loc = member.location;
   const speedKmh = loc?.speed ? loc.speed * 3.6 : null;
@@ -214,7 +218,7 @@ export default function MemberActionSheet({
   };
 
   const Content = (
-    <div className={cn("flex flex-col gap-6", isDesktop && "p-8")}>
+    <div className={cn("flex flex-col gap-6", effectiveIsDesktop && "p-8")}>
       {/* Header Info */}
       <div className="flex items-center gap-5">
         <div className="relative shrink-0">
@@ -245,8 +249,8 @@ export default function MemberActionSheet({
             </div>
           )}
         </div>
-        {isDesktop && (
-          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-10 w-10 hover:bg-white/10 shrink-0 self-start">
+        {effectiveIsDesktop && (
+          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-10 w-10 hover:bg-black/5 dark:hover:bg-white/10 shrink-0 self-start">
             <X className="w-5 h-5 opacity-40 hover:opacity-100" />
           </Button>
         )}
@@ -280,15 +284,29 @@ export default function MemberActionSheet({
 
       {/* Main Actions */}
       <div className="flex flex-col gap-3">
-        <Button
-          onClick={handleNavigate}
-          variant="default"
-          className="w-full h-14 rounded-2xl font-bold uppercase tracking-widest text-sm gap-3 shadow-xl transition-all active:scale-95"
-          disabled={!loc}
-        >
-          <Navigation className="w-5 h-5 fill-current" />
-          {t.navigate}
-        </Button>
+        <div className="flex gap-2 w-full">
+          <Button
+            onClick={handleNavigate}
+            variant="default"
+            className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-sm gap-3 shadow-[0_8px_16px_-4px_rgba(59,130,246,0.3)] dark:shadow-[0_8px_16px_-4px_rgba(0,0,0,0.4)] transition-all active:scale-95"
+            disabled={!loc}
+          >
+            <Navigation className="w-5 h-5 fill-current" />
+            {t.navigate}
+          </Button>
+
+          {isSOS && (
+            <Button
+              variant="destructive"
+              className="aspect-square h-14 w-14 rounded-2xl p-0 animate-pulse shadow-[0_8px_16px_-4px_rgba(239,68,68,0.4)]"
+              onClick={() => {
+                toast({ title: 'Người dùng này đang gửi SOS!', description: 'Hãy liên lạc ngay lập tức.' });
+              }}
+            >
+              <AlertTriangle className="w-6 h-6" />
+            </Button>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <Button
@@ -347,13 +365,13 @@ export default function MemberActionSheet({
     </div>
   );
 
-  if (isDesktop) {
+  if (effectiveIsDesktop) {
     return (
       <div className={cn(
-        "fixed z-[1001] bottom-24 left-[calc(20rem+1rem)] w-96 max-h-[85vh] overflow-y-auto",
-        "bg-background/80 backdrop-blur-3xl border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] rounded-[40px]",
-        "animate-in slide-in-from-left-8 duration-500 ease-out fill-mode-both",
-        !open && "animate-out slide-out-to-left-12 fade-out-0 scale-95"
+        "fixed z-[1001] bottom-6 left-[calc(20rem+1.5rem)] w-[420px] max-h-[85vh] overflow-y-auto",
+        "bg-card/95 backdrop-blur-2xl border border-border/50 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] rounded-[40px] p-2",
+        "animate-in slide-in-from-bottom-8 fade-in-0 duration-500 ease-out fill-mode-both",
+        !open && "animate-out slide-out-to-bottom-12 fade-out-0 scale-95"
       )}>
         {Content}
       </div>
@@ -377,7 +395,9 @@ function StatusCard({ icon, value, label, active }: { icon: React.ReactNode, val
   return (
     <div className={cn(
       "flex flex-col items-center justify-center p-4 rounded-3xl border transition-all shadow-sm",
-      active ? "bg-white/5 border-white/10" : "opacity-30 border-transparent bg-transparent"
+      active 
+        ? "bg-secondary/50 dark:bg-white/5 border-border/50 dark:border-white/10" 
+        : "opacity-30 border-transparent bg-transparent"
     )}>
       <div className="mb-2">{icon}</div>
       <span className="text-sm font-bold text-foreground text-center leading-none mb-1.5">{value}</span>

@@ -21,7 +21,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
   const promise = (async (): Promise<string> => {
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`,
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi&addressdetails=1&extratags=1`,
         {
           headers: { 'User-Agent': 'FamilyTracker/1.0 (family-tracker-app)' },
           signal: AbortSignal.timeout(5000),
@@ -33,11 +33,25 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
 
       // Build a concise, human-readable Vietnamese address
       const parts: string[] = [];
+      
+      // 1. Specific point (House number or Place name / POI)
+      const extratags = data.extratags ?? {};
+      const houseNum = addr.house_number || extratags['addr:housenumber'] || addr.building;
+      const poiName = addr.amenity || addr.shop || addr.office || addr.tourism || addr.leisure || addr.industrial;
+      
+      const point = (houseNum && poiName) ? `${houseNum}, ${poiName}` : (houseNum || poiName);
+      if (point) parts.push(point);
+
+      // 2. Road
       if (addr.road) parts.push(addr.road);
-      if (addr.suburb || addr.quarter || addr.neighbourhood)
-        parts.push(addr.suburb ?? addr.quarter ?? addr.neighbourhood);
-      if (addr.city_district || addr.town || addr.village)
-        parts.push(addr.city_district ?? addr.town ?? addr.village);
+
+      // 3. Area (Suburb, Ward, etc.)
+      const area = addr.suburb || addr.quarter || addr.neighbourhood || addr.hamlet || addr.village;
+      if (area) parts.push(area);
+
+      // 4. District/Town
+      const district = addr.city_district || addr.town || addr.district;
+      if (district) parts.push(district);
 
       const result =
         parts.length > 0
