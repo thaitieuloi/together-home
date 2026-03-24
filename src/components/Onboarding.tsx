@@ -25,7 +25,7 @@ const SLIDES = {
       color: 'text-emerald-500',
       bg: 'bg-emerald-500/10',
       title: 'Chat gia đình trong tầm tay',
-      desc: 'Nhắn tin, chia sẻ hình ảnh, và gửi vị trí trực tiếp trong nhóm gia đình.',
+      desc: 'Nhắn tin, chia sẻ hình ảnh, và gửi vị trí trực tiếp trong gia đình.',
     },
   ],
   en: [

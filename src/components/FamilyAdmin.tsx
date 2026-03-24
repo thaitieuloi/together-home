@@ -58,7 +58,7 @@ const TEXT = {
     confirmPromote: 'Bạn có muốn cấp quyền Admin cho người này?',
     successPromoted: 'Đã cấp quyền Admin!',
     regenerationSuccess: 'Mã mời đã được thay đổi!',
-    desc: 'Chỉnh sửa thông tin và quản lý các thành viên trong nhóm.',
+    desc: 'Chỉnh sửa thông tin và quản lý các thành viên trong gia đình.',
     dangerZone: 'Khu vực nguy hiểm',
     transferOwnership: 'Chuyển quyền sở hữu',
     regenerateWarning: 'Mã cũ sẽ không còn hiệu lực sau khi đổi.',
@@ -94,7 +94,7 @@ export default function FamilyAdmin({ onBack }: Props) {
   const { user } = useAuth();
   const { language } = useLanguage();
   const t = TEXT[language];
-  const { family, members, refetch } = useFamily();
+  const { family, members, loading, refetch } = useFamily();
   const { toast } = useToast();
 
   const [familyName, setFamilyName] = useState(family?.name || '');
@@ -107,6 +107,15 @@ export default function FamilyAdmin({ onBack }: Props) {
   useEffect(() => {
     if (family) setFamilyName(family.name);
   }, [family]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground font-medium animate-pulse">{language === 'vi' ? 'Đang tải dữ liệu...' : 'Loading family details...'}</p>
+      </div>
+    );
+  }
 
   const isAdmin = members.find((m) => m.user_id === user?.id)?.role === 'admin';
 

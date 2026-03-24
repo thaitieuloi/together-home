@@ -66,11 +66,10 @@ Deno.serve(async (req) => {
     await supabase.from("notifications").insert(
       memberIds.map((memberId) => ({
         user_id: memberId,
-        family_id: userMembership.family_id,
         type: "battery_low",
         title: `🔋 Pin thấp`,
-        message: `${profile?.display_name ?? "Thành viên"} còn ${battery_level}% pin`,
-        data: { sender_id: user.id, battery_level },
+        body: `${profile?.display_name ?? "Thành viên"} còn ${battery_level}% pin`,
+        metadata: { sender_id: user.id, battery_level },
       }))
     );
 

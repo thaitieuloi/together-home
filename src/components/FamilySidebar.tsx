@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { enUS, vi } from 'date-fns/locale';
 import { formatRelativeTime, getServerNow } from '@/lib/time';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -50,8 +50,13 @@ import { ScrollArea } from './ui/scroll-area';
 const SIDEBAR_TEXT = {
   vi: {
     online: 'Trực tuyến',
-    recent: 'Vừa xong',
-    offline: 'Ngoại tuyến',
+    background: 'Đang chạy ngầm',
+    closed: 'Đã đóng app',
+    offline: 'Thoát hệ thống',
+    disconnected: 'Ngoại tuyến',
+    lastSeenPrefix: 'Truy cập',
+    lastSeenSuffix: 'phút trước',
+    justNow: 'Truy cập vừa xong',
     copied: 'Đã sao chép mã mời!',
     removeError: 'Không thể xóa thành viên',
     removed: 'Đã xóa',
@@ -65,15 +70,20 @@ const SIDEBAR_TEXT = {
     signOut: 'Đăng xuất',
     removeMemberTitle: 'Xóa thành viên',
     removeMemberConfirm: 'Bạn có chắc muốn xóa',
-    fromFamily: 'khỏi nhóm gia đình?',
+    fromFamily: 'khỏi gia đình?',
     cancel: 'Hủy',
     remove: 'Xóa',
-    familyId: 'ID Nhóm',
+    familyId: 'ID Gia đình',
   },
   en: {
     online: 'Online',
-    recent: 'Recently',
-    offline: 'Offline',
+    background: 'Background',
+    closed: 'App closed',
+    offline: 'Signed out',
+    disconnected: 'Disconnected',
+    lastSeenPrefix: 'Accessed',
+    lastSeenSuffix: 'mins ago',
+    justNow: 'Accessed just now',
     copied: 'Invite code copied!',
     removeError: 'Unable to remove member',
     removed: 'Removed',
@@ -94,13 +104,36 @@ const SIDEBAR_TEXT = {
   },
 };
 
-function getStatusInfo(status: 'online' | 'idle' | 'offline', timestamp: string | undefined, language: 'vi' | 'en') {
+function getStatusInfo(
+  status: 'online' | 'idle' | 'offline' | 'logged_out',
+  locationTime: string | undefined,
+  profileTime: string | undefined,
+  language: 'vi' | 'en',
+  hasPushToken: boolean
+) {
   const text = SIDEBAR_TEXT[language];
   const now = getServerNow().getTime();
-  const diffMs = timestamp ? Math.max(0, now - new Date(timestamp).getTime()) : Infinity;
+  
+  const locMs = locationTime ? new Date(locationTime).getTime() : 0;
+  const profMs = profileTime ? new Date(profileTime).getTime() : 0;
+  const lastSeenMs = Math.max(locMs, profMs);
+  
+  const diffMs = lastSeenMs > 0 ? Math.max(0, now - lastSeenMs) : Infinity;
   const diffMin = diffMs / 60000;
   
-  if (status === 'online') {
+  const formatAccessTime = (min: number) => {
+    if (min < 1) return text.justNow;
+    if (min < 60) return `${text.lastSeenPrefix} ${Math.round(min)} ${text.lastSeenSuffix}`;
+    if (min < 1440) return `${text.lastSeenPrefix} ${Math.round(min / 60)} giờ trước`;
+    return `${text.lastSeenPrefix} ${Math.round(min / 1440)} ngày trước`;
+  };
+
+  const isActuallyOnline = status === 'online' && diffMin < 1;
+  const isActuallyBackground = status === 'idle' && diffMin < 2;
+  const isActuallySignedOut = status === 'logged_out'; // Logout chủ động
+  const isActuallyClosed = status === 'offline' || (status === 'idle' && diffMin >= 2) || (status === 'online' && diffMin >= 1); // Swipe thoát hoặc timeout app
+
+  if (isActuallyOnline) {
     return {
       color: 'bg-emerald-500',
       label: text.online,
@@ -110,21 +143,42 @@ function getStatusInfo(status: 'online' | 'idle' | 'offline', timestamp: string 
     };
   }
 
-  if (status === 'idle' || (status !== 'offline' && diffMin >= 15 && diffMin < 60)) {
+  if (isActuallyBackground) {
     return {
-      color: 'bg-amber-500',
-      label: text.recent,
-      ring: 'ring-amber-500/20',
-      textClass: 'text-amber-500',
+      color: 'bg-orange-500',
+      label: formatAccessTime(diffMin),
+      ring: 'ring-orange-500/20',
+      textClass: 'text-orange-500',
       isOffline: false,
     };
   }
 
+  if (isActuallyClosed) {
+    return {
+      color: 'bg-indigo-400',
+      label: formatAccessTime(diffMin),
+      ring: 'ring-indigo-400/10',
+      textClass: 'text-indigo-400',
+      isOffline: true,
+    };
+  }
+
+  if (isActuallySignedOut) {
+    return {
+      color: 'bg-slate-300',
+      label: text.offline,
+      ring: 'ring-slate-300/10',
+      textClass: 'text-slate-400',
+      isOffline: true,
+      isSignedOut: true,
+    };
+  }
+
   return {
-    color: 'bg-slate-400',
-    label: text.offline,
-    ring: 'ring-slate-400/10',
-    textClass: 'text-slate-500',
+    color: 'bg-slate-300',
+    label: text.disconnected,
+    ring: 'ring-slate-300/10',
+    textClass: 'text-slate-400',
     isOffline: true,
   };
 }
@@ -175,6 +229,12 @@ export default function FamilySidebar({
 
   const isAdmin = members.find((m) => m.user_id === user?.id)?.role === 'admin';
 
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 15000); // Check every 15s to be safe
+    return () => clearInterval(timer);
+  }, []);
+
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
   const copyInviteCode = () => {
@@ -222,7 +282,7 @@ export default function FamilySidebar({
         <ScrollArea className="flex-1 w-full">
           <div className="flex flex-col items-center gap-4 py-2">
             {sortedMembers.map((m, i) => {
-              const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, language);
+              const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, m.profile.updated_at, language, !!m.profile.push_token);
               const isSOS = activeSOSUserIds.has(m.user_id);
               return (
                 <button
@@ -282,7 +342,7 @@ export default function FamilySidebar({
             className="group flex flex-col gap-2 p-4 bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-2xl cursor-pointer transition-all active:scale-[0.98]"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-primary uppercase tracking-widest leading-none">Mã mời nhóm</span>
+              <span className="text-[11px] font-bold text-primary uppercase tracking-widest leading-none">Mã mời gia đình</span>
               <button className="p-1 rounded-md bg-primary/10 group-hover:bg-primary/20 transition-colors">
                 <Copy className="w-3.5 h-3.5 text-primary" />
               </button>
@@ -302,7 +362,7 @@ export default function FamilySidebar({
           <ScrollArea className="flex-1">
             <div className="space-y-1 p-3 pb-8">
               {sortedMembers.map((m, i) => {
-                const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, language);
+                const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, m.profile.updated_at, language, !!m.profile.push_token);
                 const isUpdated = recentlyUpdated.has(m.user_id);
                 const isSOS = activeSOSUserIds.has(m.user_id);
                 const isLive = liveSharingUserIds.has(m.user_id);
@@ -375,18 +435,23 @@ export default function FamilySidebar({
                               </span>
                             ) : freshness?.label}
                           </span>
-                          <span className="text-muted-foreground/30">•</span>
-                          <div className="flex items-center gap-1.5 overflow-hidden">
-                            <Clock className="w-3 h-3 shrink-0 opacity-40 text-muted-foreground" />
-                            <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
-                              {(() => {
-                                const locTime = m.location?.timestamp ? new Date(m.location.timestamp).getTime() : 0;
-                                const profileTime = m.profile.updated_at ? new Date(m.profile.updated_at).getTime() : 0;
-                                const bestTime = Math.max(locTime, profileTime);
-                                return bestTime > 0 ? formatRelativeTime(bestTime, language) : text.noLocation;
-                              })()}
-                            </span>
-                          </div>
+
+                          {!freshness?.isSignedOut && (
+                            <>
+                              <span className="text-muted-foreground/30">•</span>
+                              <div className="flex items-center gap-1.5 overflow-hidden">
+                                <Clock className="w-3 h-3 shrink-0 opacity-40 text-muted-foreground" />
+                                <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
+                                  {(() => {
+                                    const locTime = m.location?.timestamp ? new Date(m.location.timestamp).getTime() : 0;
+                                    const profileTime = m.profile.updated_at ? new Date(m.profile.updated_at).getTime() : 0;
+                                    const bestTime = Math.max(locTime, profileTime);
+                                    return bestTime > 0 ? formatRelativeTime(bestTime, language) : text.noLocation;
+                                  })()}
+                                </span>
+                              </div>
+                            </>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 mt-2">
@@ -448,7 +513,7 @@ export default function FamilySidebar({
               onClick={onOpenFamilyAdmin}
               className="w-full justify-start text-[12px] font-bold uppercase tracking-wider text-primary hover:bg-primary/10 h-10 rounded-xl px-4"
             >
-              <ShieldCheck className="w-4.5 h-4.5 mr-2.5" /> {language === 'vi' ? 'Quản lý nhóm' : 'Family Admin'}
+              <ShieldCheck className="w-4.5 h-4.5 mr-2.5" /> {language === 'vi' ? 'Quản lý gia đình' : 'Family Admin'}
             </Button>
           )}
 

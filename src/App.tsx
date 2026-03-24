@@ -23,8 +23,14 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
+                <Route path="/dashboard" element={<Index />} />
+                <Route path="/profile" element={<Index />} />
+                <Route path="/family-admin" element={<Index />} />
+                <Route path="/geofences" element={<Index />} />
+                <Route path="/history" element={<Index />} />
+                <Route path="/chat" element={<Index />} />
                 <Route path="/install" element={<Install />} />
-                <Route path="*" element={<NotFound />} />
+                <Route path="*" element={<Index />} />
               </Routes>
             </BrowserRouter>
           </TooltipProvider>

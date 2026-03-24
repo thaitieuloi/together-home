@@ -43,9 +43,13 @@ export function useSOSAlerts() {
             audio.play().catch(() => {});
           } catch {}
 
+          // Get address
+          const { reverseGeocode } = await import('@/lib/geocoding');
+          const address = await reverseGeocode(alert.latitude, alert.longitude);
+
           toast({
             title: '🆘 SOS Khẩn cấp!',
-            description: `${profile?.display_name || 'Thành viên'} cần giúp đỡ! Vị trí: ${alert.latitude.toFixed(4)}, ${alert.longitude.toFixed(4)}`,
+            description: `${profile?.display_name || 'Thành viên'} cần giúp đỡ khẩn cấp tại: ${address}`,
             variant: 'destructive',
             duration: 15000,
           });

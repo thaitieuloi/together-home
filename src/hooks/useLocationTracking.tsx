@@ -44,7 +44,7 @@ type QueuedLocation = NativeQueuedLocation & {
   speed: number | null;
 };
 
-const MAX_ACCURACY_METERS = 120;
+const MAX_ACCURACY_METERS = 200; // Increased to 200m to be more lenient in buildings/trees
 const MIN_DISTANCE_METERS = 5;
 const INTERVAL_MOVING_MS = 7000;
 const INTERVAL_IDLE_MS = 20000;
@@ -440,8 +440,8 @@ export function useLocationTracking() {
             try {
               const pos = await Geolocation.getCurrentPosition({
                 enableHighAccuracy: true,
-                timeout: 20000,
-                maximumAge: 10000,
+                timeout: 30000,
+                maximumAge: 30000,
               });
 
               trackingLog('debug', 'Foreground heartbeat location captured', {

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { AlertTriangle, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { reverseGeocode } from '@/lib/geocoding';
 
 const COUNTDOWN_SECONDS = 5;
 
@@ -49,8 +50,9 @@ export default function SOSButton() {
 
       if (error) throw error;
 
+      const address = await reverseGeocode(latitude, longitude);
       await supabase.functions.invoke('send-sos-notification', {
-        body: { latitude, longitude },
+        body: { latitude, longitude, address },
       });
 
       toast({

@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { App } from '@capacitor/app';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { useAuth } from '@/hooks/useAuth';
 import { useFamily } from '@/hooks/useFamily';
 import { useLocationTracking } from '@/hooks/useLocationTracking';
@@ -67,6 +70,8 @@ export default function Dashboard() {
   const { user, signOut } = useAuth();
   const { language } = useLanguage();
   const text = DASHBOARD_TEXT[language];
+  const navigate = useNavigate();
+  const location = useLocation();
   const { family, members, loading, updateMemberLocation, updateMemberProfile, refetch } = useFamily();
   const { toast } = useToast();
 
@@ -177,13 +182,15 @@ export default function Dashboard() {
 
   const handleMessageMember = (_member: FamilyMemberWithProfile) => {
     setShowChat(true);
-    // Keep the action sheet open so user can perform other actions for the SAME member
+    setShowMemberSheet(false);
+    navigate('/chat');
   };
 
   const handleShowMemberHistory = (member: FamilyMemberWithProfile) => {
     setSelectedMemberForHistoryId(member.user_id);
     setShowHistory(true);
-    // Keep the action sheet open as per user request for "opening more"
+    setShowMemberSheet(false);
+    navigate('/history');
     if (member.location) {
       setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
     }
@@ -226,7 +233,17 @@ export default function Dashboard() {
     setHistoryTrail([]);
     setPlaybackPoint(null);
     setSelectedMemberForHistoryId(undefined);
+    navigate('/dashboard');
   };
+
+  useEffect(() => {
+    // Initial panel based on route
+    if (location.pathname === '/profile') setShowProfile(true);
+    if (location.pathname === '/family-admin') setShowFamilyAdmin(true);
+    if (location.pathname === '/geofences') setShowGeofences(true);
+    if (location.pathname === '/history') setShowHistory(true);
+    if (location.pathname === '/chat') setShowChat(true);
+  }, [location.pathname]);
 
   // Status tracking (Online/Idle/Offline)
   useEffect(() => {
@@ -249,21 +266,38 @@ export default function Dashboard() {
     // Mark as online when first entering the dashboard
     updateStatus('online');
 
-    const handleFocus = () => updateStatus('online');
-    const handleBlur = () => updateStatus('idle');
-    const handleUnload = () => {
-      // Keep it simple for now, maybe set to offline if you are sure
+    const handleFocus = () => {
+      console.log('📡 [Status] App focused');
+      updateStatus('online');
+    };
+    const handleBlur = () => {
+      console.log('📡 [Status] App blurred');
+      updateStatus('idle');
     };
 
     window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);
-    window.addEventListener('beforeunload', handleUnload);
+
+    // Capacitor handle background/foreground natively
+    let appStateListener: any;
+    if (Capacitor.isNativePlatform()) {
+      appStateListener = App.addListener('appStateChange', ({ isActive }) => {
+        console.log(`📡 [Status] Native App State Change: ${isActive ? 'active' : 'inactive'}`);
+        if (isActive) {
+          updateStatus('online');
+        } else {
+          updateStatus('offline'); // Changed to offline for consistency
+        }
+      });
+    }
 
     return () => {
-      updateStatus('idle');
+      updateStatus('offline');
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('beforeunload', handleUnload);
+      if (appStateListener) {
+        appStateListener.remove();
+      }
     };
   }, [user]);
 
@@ -282,6 +316,7 @@ export default function Dashboard() {
         setShowGeofences(false);
         setShowDebug(false);
         handleCloseHistory();
+        navigate('/dashboard');
       }
       return next;
     });
@@ -296,8 +331,10 @@ export default function Dashboard() {
         setShowChat(false);
         setShowNotifications(false);
         setShowDebug(false);
+        navigate('/history');
       } else {
         setHistoryTrail([]);
+        navigate('/dashboard');
       }
       return next;
     });
@@ -312,6 +349,9 @@ export default function Dashboard() {
         setShowChat(false);
         setShowNotifications(false);
         setShowDebug(false);
+        navigate('/geofences');
+      } else {
+        navigate('/dashboard');
       }
       return next;
     });
@@ -326,6 +366,9 @@ export default function Dashboard() {
         setShowHistory(false);
         setShowGeofences(false);
         setShowDebug(false);
+        navigate('/chat');
+      } else {
+        navigate('/dashboard');
       }
       return next;
     });
@@ -365,14 +408,17 @@ export default function Dashboard() {
 
   const handleBackFromProfile = () => {
     setExitingProfile(true);
+    navigate('/dashboard');
   };
 
   const handleBackFromGeofence = () => {
     setExitingGeofence(true);
+    navigate('/dashboard');
   };
 
   const handleBackFromFamilyAdmin = () => {
     setExitingFamilyAdmin(true);
+    navigate('/dashboard');
   };
 
   if (showProfile) {
@@ -433,8 +479,8 @@ export default function Dashboard() {
           members={members}
           onMemberClick={handleMemberClick}
           onSignOut={signOut}
-          onOpenProfile={() => setShowProfile(true)}
-          onOpenFamilyAdmin={() => setShowFamilyAdmin(true)}
+          onOpenProfile={() => { navigate('/profile'); setShowProfile(true); }}
+          onOpenFamilyAdmin={() => { navigate('/family-admin'); setShowFamilyAdmin(true); }}
           onShowTrip={handleShowTrip}
           recentlyUpdated={recentlyUpdated}
           liveSharingUserIds={liveSharingUserIds}
@@ -462,10 +508,12 @@ export default function Dashboard() {
               onMemberClick={handleMemberClick}
               onSignOut={signOut}
               onOpenProfile={() => {
+                navigate('/profile');
                 setShowProfile(true);
                 setMobileOpen(false);
               }}
               onOpenFamilyAdmin={() => {
+                navigate('/family-admin');
                 setShowFamilyAdmin(true);
                 setMobileOpen(false);
               }}
@@ -594,16 +642,16 @@ export default function Dashboard() {
               </Badge>
             )}
           </Button>
-          <Button variant={showHistory ? 'default' : 'ghost'} className="h-10 rounded-xl" onClick={toggleHistory}>
+          <Button variant={showHistory ? 'default' : 'ghost'} className="h-10 rounded-xl" onClick={() => { toggleHistory(); navigate(showHistory ? '/dashboard' : '/history'); }}>
             <History className="w-4 h-4" />
           </Button>
           <Button variant={showGeofences ? 'default' : 'ghost'} className="h-10 rounded-xl" onClick={toggleGeofences}>
             <Shield className="w-4 h-4" />
           </Button>
-          <Button variant={showChat ? 'default' : 'ghost'} className="h-10 rounded-xl relative" onClick={toggleChat}>
+          <Button variant={showChat ? 'default' : 'ghost'} className="h-10 rounded-xl relative" onClick={() => { toggleChat(); navigate(showChat ? '/dashboard' : '/chat'); }}>
             <MessageCircle className="w-4 h-4" />
             {unreadCount > 0 && !showChat && (
-              <Badge className="absolute -top-1 -right-1 h-4 min-w-[16px] p-0 text-[9px] bg-destructive text-destructive-foreground">
+              <Badge className="absolute -top-1 -right-1 h-4 min-w-[16px] p-0 text-[10px] bg-destructive text-destructive-foreground">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </Badge>
             )}

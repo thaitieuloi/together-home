@@ -27,12 +27,15 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { formatRelativeTime } from '@/lib/time';
 import { enUS, vi as viLocale } from 'date-fns/locale';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { reverseGeocode } from '@/lib/geocoding';
+import { MapPin } from 'lucide-react';
 
 interface Props {
   member: FamilyMemberWithProfile | null;
@@ -55,9 +58,14 @@ const TEXT = {
     speed: 'Tốc độ',
     lastSeen: 'Cập nhật',
     noLocation: 'Chưa có vị trí',
-    offline: 'Ngoại tuyến',
+    offline: 'Đã đăng xuất',
     online: 'Trực tuyến',
-    recent: 'Vừa xong',
+    recent: 'Chạy ngầm',
+    closed: 'Đã đóng app',
+    disconnected: 'Ngoại tuyến',
+    lastSeenPrefix: 'Truy cập',
+    lastSeenSuffix: 'phút trước',
+    justNow: 'Truy cập vừa xong',
     moving: 'Di chuyển',
     stationary: 'Đứng yên',
     walking: 'Đi bộ',
@@ -77,9 +85,14 @@ const TEXT = {
     speed: 'Speed',
     lastSeen: 'Updated',
     noLocation: 'No location',
-    offline: 'Offline',
+    offline: 'Signed out',
     online: 'Online',
-    recent: 'Recently',
+    recent: 'Background',
+    closed: 'Closed',
+    disconnected: 'Disconnected',
+    lastSeenPrefix: 'Accessed',
+    lastSeenSuffix: 'mins ago',
+    justNow: 'Accessed just now',
     moving: 'Moving',
     stationary: 'Stationary',
     walking: 'Walking',
@@ -100,21 +113,43 @@ function getTravelMode(speedKmh: number | null, isMoving: boolean | null, t: typ
   return t.stationary;
 }
 
-export default function MemberActionSheet({ member, open, onClose, onNavigate, onMessage, onViewHistory, onUpdate, isAdmin, isSOS }: Props) {
+export default function MemberActionSheet({
+  member,
+  open,
+  onClose,
+  onNavigate,
+  onMessage,
+  onViewHistory,
+  onUpdate,
+  isAdmin,
+  isSOS,
+  isDesktop = false,
+}: Props) {
   const { user } = useAuth();
   const { language } = useLanguage();
   const t = TEXT[language];
   const dateLocale = language === 'vi' ? viLocale : enUS;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
+  const [activeTab, setActiveTab] = useState('summary');
+  const [tick, setTick] = useState(0);
+
+  const [address, setAddress] = useState<string | null>(null);
 
   useEffect(() => {
-    const check = () => setIsDesktop(window.innerWidth >= 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
+    if (open) {
+      const timer = setInterval(() => setTick(t => t + 1), 15000);
+      return () => clearInterval(timer);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (member?.location) {
+      reverseGeocode(member.location.latitude, member.location.longitude).then(setAddress);
+    } else {
+      setAddress(null);
+    }
+  }, [member?.user_id, member?.location?.latitude, member?.location?.longitude]);
 
   if (!member || !user || (!open && isDesktop)) return null;
 
@@ -122,14 +157,30 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
   const speedKmh = loc?.speed ? loc.speed * 3.6 : null;
   const travelMode = loc ? getTravelMode(speedKmh, loc.is_moving, t) : null;
   const status = member.profile.status;
-  const diffMin = loc ? Math.max(0, (Date.now() - new Date(loc.timestamp).getTime()) / 60000) : Infinity;
+  const locMs = loc ? new Date(loc.timestamp).getTime() : 0;
+  const profMs = member.profile.updated_at ? new Date(member.profile.updated_at).getTime() : 0;
+  const lastSeenMs = Math.max(locMs, profMs);
+  const diffMin = lastSeenMs > 0 ? Math.max(0, (Date.now() - lastSeenMs) / 60000) : Infinity;
 
-  const isActuallyOnline = status === 'online' && diffMin < 15;
-  const isActuallyIdle = status === 'idle' || (diffMin >= 15 && diffMin < 60);
-  const isActuallyOffline = !isActuallyOnline && !isActuallyIdle;
+  const isActuallyOnline = status === 'online' && diffMin < 1;
+  const isActuallyBackground = status === 'idle' && diffMin < 2;
+  const isActuallyClosed = (status === 'offline' || (status === 'idle' && diffMin >= 2) || (status === 'online' && diffMin >= 1)) && member.profile.push_token != null && diffMin < 10080;
+  const isActuallySignedOut = status === 'offline' && member.profile.push_token == null;
 
-  const freshnessLabel = isActuallyOnline ? t.online : isActuallyIdle ? t.recent : t.offline;
-  const freshnessColor = isActuallyOnline ? 'bg-emerald-500' : isActuallyIdle ? 'bg-amber-500' : 'bg-slate-400';
+  const formatAccessTime = (min: number) => {
+    if (min < 1) return t.justNow;
+    if (min < 60) return `${t.lastSeenPrefix} ${Math.round(min)} ${t.lastSeenSuffix}`;
+    if (min < 1440) return `${t.lastSeenPrefix} ${Math.round(min / 60)} giờ trước`;
+    return `${t.lastSeenPrefix} ${Math.round(min / 1440)} ngày trước`;
+  };
+
+  const freshnessLabel = isActuallyOnline 
+    ? t.online 
+    : (isActuallyBackground || isActuallyClosed) 
+        ? formatAccessTime(diffMin)
+        : isActuallySignedOut ? t.offline : t.disconnected;
+  const freshnessColor = isActuallyOnline ? 'bg-emerald-500' : isActuallyBackground ? 'bg-orange-500' : isActuallyClosed ? 'bg-indigo-400' : 'bg-slate-300';
+  const showBadge = !isActuallySignedOut;
 
   const handleNavigate = () => {
     if (!loc) return;
@@ -180,16 +231,19 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
             {member.profile.display_name}
           </h3>
           <div className="flex flex-wrap gap-2 align-center">
-            <Badge variant="outline" className={cn("text-xs uppercase font-bold px-2.5 h-6 rounded-md", isActuallyOffline ? "text-slate-400 border-slate-200" : "text-emerald-500 border-emerald-500/30 bg-emerald-500/5")}>
-              {freshnessLabel}
-            </Badge>
-            {travelMode && (
-              <Badge variant="secondary" className="text-xs uppercase font-bold px-2.5 h-6 rounded-md bg-primary/10 text-primary border-primary/20">
-                {travelMode}
+            {showBadge && (
+              <Badge variant="outline" className={cn("text-xs uppercase font-bold px-2.5 h-6 rounded-md shadow-sm", isActuallyOnline ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5" : (isActuallyBackground ? "text-orange-500 border-orange-500/30" : "text-indigo-400 border-indigo-400/30"))}>
+                {freshnessLabel}
               </Badge>
             )}
             {isSOS && <Badge variant="destructive" className="animate-pulse text-xs uppercase font-bold px-2.5 h-6 rounded-md">🆘 SOS</Badge>}
           </div>
+          {address && (
+            <div className="flex items-start gap-1.5 mt-2 opacity-70">
+              <MapPin className="w-3.5 h-3.5 mt-0.5 text-primary shrink-0" />
+              <p className="text-xs leading-tight line-clamp-2">{address}</p>
+            </div>
+          )}
         </div>
         {isDesktop && (
           <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-10 w-10 hover:bg-white/10 shrink-0 self-start">
@@ -213,12 +267,14 @@ export default function MemberActionSheet({ member, open, onClose, onNavigate, o
             label={t.speed}
             active={speedKmh !== null && loc.is_moving}
           />
-          <StatusCard
-            icon={<Clock className="w-5 h-5 text-orange-500" />}
-            value={formatDistanceToNow(new Date(loc.timestamp), { addSuffix: false, locale: dateLocale })}
-            label={t.lastSeen}
-            active={true}
-          />
+          {!isActuallySignedOut && (
+            <StatusCard
+              icon={<Clock className="w-5 h-5 text-orange-500" />}
+              value={formatRelativeTime(lastSeenMs, language)}
+              label={t.lastSeen}
+              active={true}
+            />
+          )}
         </div>
       )}
 

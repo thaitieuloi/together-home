@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { latitude, longitude } = await req.json();
+    const { latitude, longitude, address } = await req.json();
 
     // Get user's profile
     const { data: profile } = await supabase
@@ -77,9 +77,20 @@ Deno.serve(async (req) => {
 
       // Log for now - push notification sending would go here
       // when FCM/APNs is configured
+      // Insert notifications for all members
+      await supabase.from("notifications").insert(
+        familyMembers.map((m) => ({
+          user_id: m.user_id,
+          type: "sos",
+          title: `🆘 SOS Khẩn cấp!`,
+          body: `${profile?.display_name || "Thành viên"} cần giúp đỡ khẩn cấp tại: ${address || (latitude + ',' + longitude)}`,
+          metadata: { sender_id: user.id, latitude, longitude, address },
+        }))
+      );
+
       console.log(
-        `SOS from ${profile?.display_name} at ${latitude},${longitude}. ` +
-        `Notifying ${profiles?.length ?? 0} members with push tokens.`
+        `SOS from ${profile?.display_name} at ${address || (latitude + ',' + longitude)}. ` +
+        `Notifying ${profiles?.length ?? 0} members.`
       );
     }
 

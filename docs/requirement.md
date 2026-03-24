@@ -28,18 +28,23 @@ Dưới đây là các điểm lưu ý về trải nghiệm người dùng đã 
 *   **Web (Fixed)**: Nhãn SOS hiển thị to, màu đỏ, nhấp nháy (pulse), căn lề phải rõ ràng. Marker trên bản đồ có vòng tròn đỏ bao quanh.
 *   **Mobile (Suggestion)**: Nút SOS nên đổi sang dạng Floating Action Button (FAB) nổi bật hơn hoặc có hiệu ứng khi người dùng mở app trong lúc có SOS active.
 
-### 2. Định nghĩa & Đồng bộ trạng thái (User Status)
+### 2. Định nghĩa 4 Trạng thái Hiện diện (Presence System)
 
-Hệ thống đã chuẩn hóa 3 trạng thái hoạt động chính, đồng bộ thời gian thực giữa Web và Mobile:
-*   **Online (🟢 Xanh)**: Người dùng đã đăng nhập và **đang mở ứng dụng** (tiền cảnh - Foreground).
-*   **Idle / Gần đây (🟡 Vàng)**: Người dùng ẩn ứng dụng (Background), chuyển sang app khác, hoặc đóng hẳn ứng dụng nhưng **vẫn đang chạy ngầm** để gửi vị trí.
-*   **Offline (🔘 Xám)**: Chỉ hiển thị khi người dùng chủ động nhấn nút **Đăng xuất (Logout)** khỏi tài khoản.
+Hệ thống đã chuẩn hóa quy trình nhận diện 4 trạng thái hoạt động, đồng bộ thời gian thực giữa Web và Mobile bằng cách kết hợp Flutter và Native Android Service:
 
-**Các cải tiến & Fix mới nhất (2026-03-20):**
-- **Sửa lỗi "Offline sau Login"**: Khắc phục tình trạng người dùng đăng nhập lại nhưng vẫn bị báo Offline do trễ đồng bộ. Đã bổ sung bước cập nhật trạng thái `online` chủ động ngay khi `signIn` thành công.
-- **Sửa lỗi "Mất Idle"**: Khắc phục việc lệnh gửi vị trí ngầm vô tình đè lên trạng thái `Idle` khiến app luôn báo `Online`. Giờ đây trạng thái phụ thuộc hoàn toàn vào vòng đời ứng dụng (App Lifecycle).
-- **Ổn định Realtime**: Web App đã được tối ưu để giữ một kết nối Realtime duy nhất, tránh việc nạp lại kênh liên tục gây mất dữ liệu trạng thái của thành viên.
-- **Database Logic**: Bổ sung Foreign Key giữa `profiles` và `users` để tối ưu tốc độ truy vấn `JOIN` và độ ổn định của dữ liệu trên Mobile.
+| Trạng thái | Màu sắc | Logic Kỹ thuật (Mobile) | Mô tả (Web Dashboard) |
+| :--- | :---: | :--- | :--- |
+| **Trực tuyến (Online)** | 🟢 | Flutter Lifecycle `resumed` | Người dùng đang mở và tương tác với ứng dụng. |
+| **Chạy ngầm (Idle)** | 🟠 | Native Android `onStop` | Người dùng nhấn Home hoặc Chuyển sang app khác (App vẫn sống). |
+| **Đã đóng app (Offline)** | 🟣 | Native `onTaskRemoved` | Người dùng **Vuốt thoát app** (Swipe close) khỏi danh sách đa nhiệm. |
+| **Thoát hệ thống (Logout)** | ⚪ | Flutter `logged_out` | Người dùng chủ động nhấn **Đăng xuất** (Lệnh xóa Token & Credentials). |
+
+**Chi Tiết Kỹ Thuật & Cải tiến (Cập nhật 2026-03-24):**
+- **Native Android Bridge**: Sử dụng `LifecycleService` (Sticky Service) để bắt sự kiện `onTaskRemoved`. Đây là kỹ thuật duy nhất cho phép gửi tín hiệu `offline` lên server trong khoảnh khắc 1-2 giây trước khi tiến trình bị OS tiêu diệt hoàn toàn khi người dùng vuốt thoát.
+- **Phân biệt Home vs Swipe**: Nhờ tầng Native, hệ thống phân biệt được khi nào người dùng chỉ "tài tạm" app (Màu Cam) và khi nào app bị đóng hẳn (Màu Tím).
+- **Lưới bảo vệ Web (Safety Net)**: Web App được thiết lập logic thông minh: Nếu `status` là `offline` thì hiện màu Tím ngay lập tức. Nếu `status` là `idle/online` nhưng quá 2 phút không có GPS mới, Web sẽ tự động chuyển sang màu Tím (Offline) để tránh báo sai trạng thái.
+- **Database Constraint**: Bảng `profiles` đã được cập nhật ràng buộc `CHECK (status IN ('online', 'idle', 'offline', 'logged_out'))` để đảm bảo tính toàn vẹn dữ liệu.
+- **Thoát hệ thống (Xám)**: Khi trạng thái là `logged_out`, Dashboard sẽ hiển thị nhãn **"Thoát hệ thống"** và màu Xám, đồng thời xóa mọi chỉ dấu định vị trước đó của người dùng này để bảo mật.
 
 ### 3. Hiển thị Lịch sử phát lại (Location History V2)
 *   **Web (New Standard)**: 
