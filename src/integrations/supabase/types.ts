@@ -333,6 +333,7 @@ export type Database = {
           display_name: string
           id: string
           push_token: string | null
+          status: string | null
           updated_at: string
           user_id: string
         }
@@ -342,6 +343,7 @@ export type Database = {
           display_name?: string
           id?: string
           push_token?: string | null
+          status?: string | null
           updated_at?: string
           user_id: string
         }
@@ -351,10 +353,19 @@ export type Database = {
           display_name?: string
           id?: string
           push_token?: string | null
+          status?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_profiles_public_users"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sos_alerts: {
         Row: {
@@ -449,6 +460,11 @@ export type Database = {
     }
     Functions: {
       cleanup_old_locations: { Args: never; Returns: undefined }
+      get_server_time: { Args: never; Returns: string }
+      is_admin_of_family: {
+        Args: { _family_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_family_member: {
         Args: { _target_user_id: string; _user_id: string }
         Returns: boolean
