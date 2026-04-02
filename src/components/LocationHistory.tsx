@@ -73,6 +73,14 @@ const TEXT = {
     stops: 'điểm dừng',
     totalDist: 'Tổng KM',
     movingTime: 'Di chuyển',
+    all: 'Tất cả',
+    driving: 'Chuyến đi',
+    cycling: 'Xe đạp',
+    walking: 'Đi bộ',
+    custom: 'Tùy chỉnh',
+    apply: 'Áp dụng',
+    fromDate: 'Từ ngày',
+    toDate: 'Đến ngày',
   },
   en: {
     title: 'Location History',
@@ -94,6 +102,14 @@ const TEXT = {
     stops: 'stops',
     totalDist: 'Total KM',
     movingTime: 'Moving',
+    all: 'All',
+    driving: 'Driving',
+    cycling: 'Cycling',
+    walking: 'Walking',
+    custom: 'Custom',
+    apply: 'Apply',
+    fromDate: 'From',
+    toDate: 'To',
   },
 };
 
@@ -183,6 +199,10 @@ export default function LocationHistory({
   const [playbackIndex, setPlaybackIndex] = useState(-1);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [playbackTimer, setPlaybackTimer] = useState<number | null>(null);
+  const [activityFilter, setActivityFilter] = useState<'all' | 'trip' | 'stay' | 'driving' | 'cycling' | 'walking'>('all');
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [customFrom, setCustomFrom] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [customTo, setCustomTo] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   // Address cache: key = "lat4,lng4" → address string
   const [addresses, setAddresses] = useState<Record<string, string>>({});
@@ -193,6 +213,19 @@ export default function LocationHistory({
 
   const trips = useMemo(() => detectTrips(trail), [trail]);
   const dayGroups = useMemo(() => buildDayGroups(trips, language), [trips, language]);
+
+  const filteredDayGroups = useMemo(() => {
+    if (activityFilter === 'all') return dayGroups;
+    return dayGroups.map(group => {
+      const filteredSegments = group.segments.filter(seg => {
+        if (activityFilter === 'trip') return seg.type === 'trip';
+        if (activityFilter === 'stay') return seg.type === 'stay';
+        if (seg.type !== 'trip') return false;
+        return getActivityType(seg.avgSpeed ?? 0) === activityFilter;
+      });
+      return { ...group, segments: filteredSegments };
+    }).filter(group => group.segments.length > 0);
+  }, [dayGroups, activityFilter]);
 
   // ── Geocode all stay points when trips change ──────────────────────────────
   useEffect(() => {
@@ -279,18 +312,32 @@ export default function LocationHistory({
     setPlaybackIndex(-1);
 
     try {
-      const range = ranges.find((r) => r.value === selectedRange);
-      const since = new Date(
-        getServerNow().getTime() - (range?.hours ?? 3) * 60 * 60 * 1000
-      ).toISOString();
+      let since: string;
+      let until: string | undefined;
 
-      const { data, error } = await supabase
+      if (useCustomRange) {
+        since = new Date(`${customFrom}T00:00:00`).toISOString();
+        until = new Date(`${customTo}T23:59:59`).toISOString();
+      } else {
+        const range = ranges.find((r) => r.value === selectedRange);
+        since = new Date(
+          getServerNow().getTime() - (range?.hours ?? 3) * 60 * 60 * 1000
+        ).toISOString();
+      }
+
+      const query = supabase
         .from('user_locations')
         .select('*')
         .eq('user_id', selectedMember)
         .gte('timestamp', since)
         .order('timestamp', { ascending: false })
         .limit(2000);
+
+      if (until) {
+        query.lte('timestamp', until);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -317,7 +364,7 @@ export default function LocationHistory({
 
   useEffect(() => {
     if (selectedMember) loadHistory();
-  }, [selectedMember, selectedRange]);
+  }, [selectedMember, selectedRange, useCustomRange, customFrom, customTo]);
 
   useEffect(() => {
     return () => { if (playbackTimer) window.clearInterval(playbackTimer); };
@@ -433,7 +480,74 @@ export default function LocationHistory({
                   {r.label}
                 </button>
               ))}
-              <div className="w-4 shrink-0" /> {/* Spacer to prevent right clipping */}
+              <div className="w-px h-6 bg-border/20 self-center mx-1 shrink-0" />
+              <button
+                onClick={() => setUseCustomRange(!useCustomRange)}
+                className={cn(
+                  'h-8 px-4 text-[11px] font-black rounded-xl whitespace-nowrap shrink-0 transition-all uppercase tracking-wider border',
+                  useCustomRange
+                    ? 'bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105'
+                    : 'bg-black/5 dark:bg-white/5 border-transparent text-muted-foreground/60 hover:text-foreground hover:bg-black/10'
+                )}
+              >
+                {t.custom}
+              </button>
+              <div className="w-4 shrink-0" />
+            </div>
+
+            {useCustomRange && (
+              <div className="flex flex-col gap-3 p-3 bg-primary/5 rounded-2xl border border-primary/10 animate-in slide-in-from-top-2 duration-300">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-muted-foreground uppercase tracking-widest pl-1">{t.fromDate}</label>
+                    <input
+                      type="date"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      className="w-full h-10 bg-background border border-border/40 rounded-xl px-3 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-muted-foreground uppercase tracking-widest pl-1">{t.toDate}</label>
+                    <input
+                      type="date"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      className="w-full h-10 bg-background border border-border/40 rounded-xl px-3 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+                <Button onClick={loadHistory} disabled={loading} className="w-full h-10 rounded-xl font-black uppercase text-[10px] tracking-widest">
+                  {t.apply}
+                </Button>
+              </div>
+            )}
+
+            {/* Activity filters */}
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 -mx-6 px-6">
+              {[
+                { id: 'all', label: t.all, icon: Activity },
+                { id: 'trip', label: t.driving, icon: Car },
+                { id: 'stay', label: t.stay, icon: MapPin },
+                { id: 'driving', label: 'Driving', icon: Gauge },
+                { id: 'cycling', label: t.cycling, icon: Bike },
+                { id: 'walking', label: t.walking, icon: Footprints },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setActivityFilter(f.id as any)}
+                  className={cn(
+                    'h-8 px-4 flex items-center gap-1.5 text-[10px] font-bold rounded-xl whitespace-nowrap shrink-0 transition-all uppercase tracking-wider border',
+                    activityFilter === f.id
+                      ? 'bg-secondary border-secondary text-secondary-foreground shadow-sm scale-105'
+                      : 'bg-transparent border-border/20 text-muted-foreground hover:text-foreground hover:bg-black/5'
+                  )}
+                >
+                  <f.icon className="w-3.5 h-3.5" />
+                  {f.label}
+                </button>
+              ))}
+              <div className="w-4 shrink-0" />
             </div>
           </div>
         </div>
@@ -474,7 +588,7 @@ export default function LocationHistory({
               {/* ── Trip list ───────────────────────────────────────────────────── */}
               <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef as any}>
                 <div className="px-5 pt-6 pb-40 space-y-8">
-                  {dayGroups.map((group) => (
+                  {filteredDayGroups.map((group) => (
                     <div key={group.dateKey} className="relative">
                       {/* Day header */}
                       <div className="sticky top-0 z-20 -mx-5 px-5 py-3 mb-6 bg-background/80 backdrop-blur-md border-y border-border/20 flex items-center justify-between">

@@ -68,11 +68,11 @@ function getFreshnessColor(member: FamilyMemberWithProfile, language: 'vi' | 'en
 
   if (isActuallyOnline) return { dot: '#10b981', label: text.online, isOffline: false };
   if (isActuallyBackground) {
-    const timeStr = diffMin < 1 ? text.justNow : `${text.lastSeenPrefix} ${Math.round(diffMin)} ${text.lastSeenSuffix}`;
+    const timeStr = diffMin <= 5 ? text.justNow : `${text.lastSeenPrefix} ${Math.round(diffMin)} ${text.lastSeenSuffix}`;
     return { dot: '#f97316', label: timeStr, isOffline: false };
   }
   if (isActuallyClosed) {
-    const timeStr = diffMin < 1 ? text.justNow : `${text.lastSeenPrefix} ${Math.round(diffMin)} ${text.lastSeenSuffix}`;
+    const timeStr = diffMin <= 5 ? text.justNow : `${text.lastSeenPrefix} ${Math.round(diffMin)} ${text.lastSeenSuffix}`;
     return { dot: '#818cf8', label: timeStr, isOffline: true };
   }
   
@@ -169,7 +169,8 @@ export default function LeafletFamilyMap({
   const liveCirclesRef = useRef<Map<string, L.Circle>>(new Map());
   const historyLayerRef = useRef<L.LayerGroup | null>(null);
   const geofenceLayerRef = useRef<L.LayerGroup | null>(null);
-  const markerLayerRef = useRef<L.LayerGroup | null>(null);
+  const markerLayerRef = useRef<any | null>(null);
+  const overlayLayerRef = useRef<L.LayerGroup | null>(null);
   const playbackLayerRef = useRef<L.LayerGroup | null>(null);
   const playbackMarkerRef = useRef<L.Marker | null>(null);
   const hasFittedBoundsRef = useRef(false);
@@ -201,10 +202,28 @@ export default function LeafletFamilyMap({
       zoomControl: false,
       center: defaultCenter,
       zoom: 13,
+      maxZoom: 19,
     });
 
     mapRef.current = map;
-    markerLayerRef.current = L.layerGroup().addTo(map);
+    markerLayerRef.current = (L as any).markerClusterGroup({
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      spiderfyOnMaxZoom: true,
+      removeOutsideVisibleBounds: true,
+      disableClusteringAtZoom: 16,
+      maxZoom: 19,
+      iconCreateFunction: (cluster: any) => {
+        const count = cluster.getChildCount();
+        return L.divIcon({
+          html: `<div style="background:rgba(59,130,246,0.9);color:white;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3); backdrop-blur: 4px;">${count}</div>`,
+          className: 'custom-cluster-icon',
+          iconSize: [40, 40],
+        });
+      },
+    }).addTo(map);
+
+    overlayLayerRef.current = L.layerGroup().addTo(map);
     historyLayerRef.current = L.layerGroup().addTo(map);
     geofenceLayerRef.current = L.layerGroup().addTo(map);
     playbackLayerRef.current = L.layerGroup().addTo(map);
@@ -232,6 +251,7 @@ export default function LeafletFamilyMap({
       mapRef.current = null;
       tileLayerRef.current = null;
       markerLayerRef.current = null;
+      overlayLayerRef.current = null;
       historyLayerRef.current = null;
       geofenceLayerRef.current = null;
       playbackLayerRef.current = null;
@@ -364,11 +384,11 @@ export default function LeafletFamilyMap({
         markersRef.current.delete(id);
 
         const circle = accuracyCirclesRef.current.get(id);
-        if (circle) markerLayerRef.current.removeLayer(circle);
+        if (circle) overlayLayerRef.current?.removeLayer(circle);
         accuracyCirclesRef.current.delete(id);
 
         const liveCircle = liveCirclesRef.current.get(id);
-        if (liveCircle) markerLayerRef.current.removeLayer(liveCircle);
+        if (liveCircle) overlayLayerRef.current?.removeLayer(liveCircle);
         liveCirclesRef.current.delete(id);
 
         const frame = animationFramesRef.current.get(id);
@@ -414,11 +434,11 @@ export default function LeafletFamilyMap({
               weight: 1,
               opacity: 0.3,
             });
-            markerLayerRef.current!.addLayer(circle);
+            overlayLayerRef.current!.addLayer(circle);
             accuracyCirclesRef.current.set(m.user_id, circle);
           }
         } else if (existingCircle) {
-          markerLayerRef.current!.removeLayer(existingCircle);
+          overlayLayerRef.current!.removeLayer(existingCircle);
           accuracyCirclesRef.current.delete(m.user_id);
         }
 
@@ -435,11 +455,11 @@ export default function LeafletFamilyMap({
               opacity: 0.5,
               className: 'live-pulse-circle',
             });
-            markerLayerRef.current!.addLayer(liveCircle);
+            overlayLayerRef.current!.addLayer(liveCircle);
             liveCirclesRef.current.set(m.user_id, liveCircle);
           }
         } else if (existingLive) {
-          markerLayerRef.current!.removeLayer(existingLive);
+          overlayLayerRef.current!.removeLayer(existingLive);
           liveCirclesRef.current.delete(m.user_id);
         }
 
@@ -461,7 +481,7 @@ export default function LeafletFamilyMap({
             weight: 1,
             opacity: 0.3,
           });
-          markerLayerRef.current!.addLayer(circle);
+          overlayLayerRef.current!.addLayer(circle);
           accuracyCirclesRef.current.set(m.user_id, circle);
         }
 
@@ -475,7 +495,7 @@ export default function LeafletFamilyMap({
             opacity: 0.5,
             className: 'live-pulse-circle',
           });
-          markerLayerRef.current!.addLayer(liveCircle);
+          overlayLayerRef.current!.addLayer(liveCircle);
           liveCirclesRef.current.set(m.user_id, liveCircle);
         }
       }

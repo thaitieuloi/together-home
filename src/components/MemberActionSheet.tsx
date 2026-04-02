@@ -78,6 +78,8 @@ const TEXT = {
     remove: 'Xóa',
     cannotRemoveSelf: 'Không thể tự xóa',
     error: 'Lỗi',
+    googleMaps: 'Google Maps',
+    appleMaps: 'Apple Maps',
   },
   en: {
     navigate: 'Directions',
@@ -105,6 +107,8 @@ const TEXT = {
     remove: 'Remove',
     cannotRemoveSelf: 'Cannot remove self',
     error: 'Error',
+    googleMaps: 'Google Maps',
+    appleMaps: 'Apple Maps',
   },
 };
 
@@ -137,6 +141,7 @@ export default function MemberActionSheet({
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('summary');
   const [tick, setTick] = useState(0);
+  const [showMapPicker, setShowMapPicker] = useState(false);
 
   const [address, setAddress] = useState<string | null>(null);
 
@@ -172,7 +177,7 @@ export default function MemberActionSheet({
   const isActuallySignedOut = status === 'offline' && member.profile.push_token == null;
 
   const formatAccessTime = (min: number) => {
-    if (min < 1) return t.justNow;
+    if (min <= 5) return t.justNow;
     if (min < 60) return `${t.lastSeenPrefix} ${Math.round(min)} ${t.lastSeenSuffix}`;
     if (min < 1440) return `${t.lastSeenPrefix} ${Math.round(min / 60)} giờ trước`;
     return `${t.lastSeenPrefix} ${Math.round(min / 1440)} ngày trước`;
@@ -186,11 +191,14 @@ export default function MemberActionSheet({
   const freshnessColor = isActuallyOnline ? 'bg-emerald-500' : isActuallyBackground ? 'bg-orange-500' : isActuallyClosed ? 'bg-indigo-400' : 'bg-slate-300';
   const showBadge = !isActuallySignedOut;
 
-  const handleNavigate = () => {
+  const handleNavigateTo = (type: 'google' | 'apple') => {
     if (!loc) return;
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${loc.latitude},${loc.longitude}`;
+    const url = type === 'google' 
+      ? `https://www.google.com/maps/dir/?api=1&destination=${loc.latitude},${loc.longitude}`
+      : `https://maps.apple.com/?daddr=${loc.latitude},${loc.longitude}&dirflg=d`;
     window.open(url, '_blank');
     onNavigate?.(member);
+    setShowMapPicker(false);
   };
 
   const handlePromote = async () => {
@@ -284,26 +292,48 @@ export default function MemberActionSheet({
 
       {/* Main Actions */}
       <div className="flex flex-col gap-3">
-        <div className="flex gap-2 w-full">
+        <div className="flex flex-col gap-2 w-full">
           <Button
-            onClick={handleNavigate}
+            onClick={() => setShowMapPicker(!showMapPicker)}
             variant="default"
-            className="flex-1 h-14 rounded-2xl font-bold uppercase tracking-widest text-sm gap-3 shadow-[0_8px_16px_-4px_rgba(59,130,246,0.3)] dark:shadow-[0_8px_16px_-4px_rgba(0,0,0,0.4)] transition-all active:scale-95"
+            className="w-full h-14 rounded-2xl font-bold uppercase tracking-widest text-sm gap-3 shadow-[0_8px_16px_-4px_rgba(59,130,246,0.3)] dark:shadow-[0_8px_16px_-4px_rgba(0,0,0,0.4)] transition-all active:scale-95"
             disabled={!loc}
           >
             <Navigation className="w-5 h-5 fill-current" />
             {t.navigate}
           </Button>
 
+          {showMapPicker && loc && (
+            <div className="flex gap-2 animate-in slide-in-from-top-2 fade-in duration-200">
+              <Button
+                variant="outline"
+                className="flex-1 h-12 rounded-xl text-xs font-bold gap-2"
+                onClick={() => handleNavigateTo('google')}
+              >
+                <ExternalLink className="w-4 h-4" />
+                {t.googleMaps}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 h-12 rounded-xl text-xs font-bold gap-2"
+                onClick={() => handleNavigateTo('apple')}
+              >
+                <ExternalLink className="w-4 h-4" />
+                {t.appleMaps}
+              </Button>
+            </div>
+          )}
+
           {isSOS && (
             <Button
               variant="destructive"
-              className="aspect-square h-14 w-14 rounded-2xl p-0 animate-pulse shadow-[0_8px_16px_-4px_rgba(239,68,68,0.4)]"
+              className="w-full h-14 rounded-2xl p-0 animate-pulse shadow-[0_8px_16px_-4px_rgba(239,68,68,0.4)] flex items-center justify-center gap-2 font-bold uppercase text-sm"
               onClick={() => {
                 toast({ title: 'Người dùng này đang gửi SOS!', description: 'Hãy liên lạc ngay lập tức.' });
               }}
             >
               <AlertTriangle className="w-6 h-6" />
+              SOS ACTIVE
             </Button>
           )}
         </div>

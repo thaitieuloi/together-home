@@ -9,6 +9,7 @@ import { useRealtimeLocations } from '@/hooks/useRealtimeLocations';
 import { useRealtimeProfiles } from '@/hooks/useRealtimeProfiles';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { useBatteryAlerts } from '@/hooks/useBatteryAlerts';
 import { useLanguage } from '@/contexts/LanguageContext';
 import FamilySidebar from '@/components/FamilySidebar';
 import FamilyMap from '@/components/FamilyMap';
@@ -101,6 +102,7 @@ export default function Dashboard() {
   useLocationTracking();
   usePushNotifications();
   useSOSAlerts();
+  useBatteryAlerts(members, user?.id);
   const activeSOSUserIds = useActiveSOSAlerts();
 
   const {

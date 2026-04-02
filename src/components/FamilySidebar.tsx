@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { enUS, vi } from 'date-fns/locale';
 import { formatRelativeTime, getServerNow } from '@/lib/time';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -104,6 +104,41 @@ const SIDEBAR_TEXT = {
   },
 };
 
+const LazyAvatarImage = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
+  const [isIntersecting, setIsIntersecting] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsIntersecting(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '100px' }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return (
+    <div ref={ref} className={cn("w-full h-full", className)}>
+      {isIntersecting ? (
+        <AvatarImage src={src} alt={alt} className="animate-in fade-in duration-500" />
+      ) : (
+        <div className="w-full h-full bg-muted/20 animate-pulse" />
+      )}
+    </div>
+  );
+};
+
 function getStatusInfo(
   status: 'online' | 'idle' | 'offline' | 'logged_out',
   locationTime: string | undefined,
@@ -122,7 +157,7 @@ function getStatusInfo(
   const diffMin = diffMs / 60000;
   
   const formatAccessTime = (min: number) => {
-    if (min < 1) return text.justNow;
+    if (min <= 5) return text.justNow;
     if (min < 60) return `${text.lastSeenPrefix} ${Math.round(min)} ${text.lastSeenSuffix}`;
     if (min < 1440) return `${text.lastSeenPrefix} ${Math.round(min / 60)} giờ trước`;
     return `${text.lastSeenPrefix} ${Math.round(min / 1440)} ngày trước`;
@@ -297,7 +332,7 @@ export default function FamilySidebar({
                       freshness?.isOffline && 'opacity-60 grayscale-[0.5]'
                     )}
                   >
-                    {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
+                    {m.profile.avatar_url ? <LazyAvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
                     <AvatarFallback className={cn('text-[10px] font-bold text-white', colors[i % colors.length])}>
                       {getInitials(m.profile.display_name)}
                     </AvatarFallback>
@@ -391,7 +426,7 @@ export default function FamilySidebar({
                             freshness?.isOffline && 'opacity-70 grayscale-[0.3]'
                           )}
                         >
-                          {m.profile.avatar_url ? <AvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
+                          {m.profile.avatar_url ? <LazyAvatarImage src={m.profile.avatar_url} alt={m.profile.display_name} /> : null}
                           <AvatarFallback className={cn('text-lg font-bold text-white', colors[i % colors.length])}>
                             {getInitials(m.profile.display_name)}
                           </AvatarFallback>
