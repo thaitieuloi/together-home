@@ -166,6 +166,11 @@ export default function Dashboard() {
     setShowMemberSheet(true);
     setMobileOpen(false);
 
+    // Always fly to member location when clicking
+    if (member.location) {
+      setFlyTo({ lat: member.location.latitude, lng: member.location.longitude });
+    }
+
     if (!isSameMember) {
       // Only close everything if switching to a DIFFERENT member
       setShowChat(false);
