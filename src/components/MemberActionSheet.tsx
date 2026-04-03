@@ -193,9 +193,28 @@ export default function MemberActionSheet({
 
   const handleNavigateTo = (type: 'google' | 'apple') => {
     if (!loc) return;
-    const url = type === 'google' 
-      ? `https://www.google.com/maps/dir/?api=1&destination=${loc.latitude},${loc.longitude}`
-      : `https://maps.apple.com/?daddr=${loc.latitude},${loc.longitude}&dirflg=d`;
+    const lat = loc.latitude;
+    const lng = loc.longitude;
+    
+    let url: string;
+    if (type === 'google') {
+      // Use geo: intent on Android for native Google Maps, fallback to web
+      const isAndroid = /android/i.test(navigator.userAgent);
+      if (isAndroid) {
+        url = `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(member.profile.display_name)})`;
+      } else {
+        url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+      }
+    } else {
+      // Apple Maps - use maps: scheme for iOS, fallback to web
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        url = `maps://?daddr=${lat},${lng}&dirflg=d`;
+      } else {
+        url = `https://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`;
+      }
+    }
+    
     window.open(url, '_blank');
     onNavigate?.(member);
     setShowMapPicker(false);

@@ -15,6 +15,7 @@ interface Props {
   onRefresh?: () => void;
   isRefreshing?: boolean;
   playbackPoint?: Tables<'user_locations'> | null;
+  onFitAllMembers?: () => void;
 }
 
 export default function FamilyMap(props: Props) {

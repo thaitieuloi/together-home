@@ -7,8 +7,8 @@ const cache = new Map<string, string>();
 const inFlight = new Map<string, Promise<string>>();
 
 function getCacheKey(lat: number, lng: number): string {
-  // Round to ~11m precision to maximize cache hits for nearby points
-  return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  // Round to ~1m precision for better house-level accuracy
+  return `${lat.toFixed(5)},${lng.toFixed(5)}`;
 }
 
 /** Convert lat/lng to human-readable address (Vietnamese preferred). */
@@ -20,8 +20,9 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
 
   const promise = (async (): Promise<string> => {
     try {
+      // Use zoom=19 for maximum detail (house-level), and include structured address
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi&addressdetails=1&extratags=1&namedetails=1&zoom=18`,
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi&addressdetails=1&extratags=1&namedetails=1&zoom=19`,
         {
           headers: { 'User-Agent': 'FamilyTracker/1.0 (family-tracker-app)' },
           signal: AbortSignal.timeout(5000),
@@ -36,19 +37,28 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
 
       // 1. Specific point — priority: house number > POI name > named OSM feature (landmark)
       const extratags = data.extratags ?? {};
-      const houseNum = addr.house_number || extratags['addr:housenumber'] || addr.building;
-      const poiName = addr.amenity || addr.shop || addr.office || addr.tourism || addr.leisure || addr.industrial;
+      const namedetails = data.namedetails ?? {};
+      
+      // Try multiple sources for house number
+      const houseNum = addr.house_number 
+        || extratags['addr:housenumber'] 
+        || namedetails['addr:housenumber']
+        || addr.building;
+      
+      const poiName = addr.amenity || addr.shop || addr.office || addr.tourism 
+        || addr.leisure || addr.industrial || addr.building;
       // data.name is the name of the matched OSM object (e.g. "Trường THPT Hóc Môn")
       const osmName = data.name && data.name !== addr.road ? data.name : null;
 
       let point: string | null = null;
-      if (houseNum && poiName) point = `${houseNum}, ${poiName}`;
+      if (houseNum && addr.road) point = `${houseNum}`;
+      else if (houseNum && poiName) point = `${houseNum}, ${poiName}`;
       else if (houseNum) point = houseNum;
       else if (poiName) point = poiName;
-      else if (osmName) point = `Gần ${osmName}`;
+      else if (osmName) point = osmName;
       if (point) parts.push(point);
 
-      // 2. Road
+      // 2. Road / Street
       if (addr.road) parts.push(addr.road);
 
       // 3. Area (Suburb, Ward, etc.)
@@ -59,10 +69,14 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
       const district = addr.city_district || addr.town || addr.district;
       if (district) parts.push(district);
 
+      // 5. City (only if different from district)
+      const city = addr.city;
+      if (city && city !== district) parts.push(city);
+
       const result =
         parts.length > 0
           ? parts.join(', ')
-          : (data.display_name ?? '').split(',').slice(0, 2).join(',').trim() ||
+          : (data.display_name ?? '').split(',').slice(0, 3).join(',').trim() ||
             `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
       cache.set(key, result);
