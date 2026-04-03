@@ -190,10 +190,10 @@ function getStatusInfo(
 
   if (isActuallyClosed) {
     return {
-      color: 'bg-indigo-400',
+      color: 'bg-purple-500',
       label: formatAccessTime(diffMin),
-      ring: 'ring-indigo-400/10',
-      textClass: 'text-indigo-400',
+      ring: 'ring-purple-500/10',
+      textClass: 'text-purple-500',
       isOffline: true,
     };
   }

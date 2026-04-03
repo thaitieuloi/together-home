@@ -21,7 +21,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
   const promise = (async (): Promise<string> => {
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi&addressdetails=1&extratags=1`,
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi&addressdetails=1&extratags=1&namedetails=1&zoom=18`,
         {
           headers: { 'User-Agent': 'FamilyTracker/1.0 (family-tracker-app)' },
           signal: AbortSignal.timeout(5000),
@@ -33,13 +33,19 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
 
       // Build a concise, human-readable Vietnamese address
       const parts: string[] = [];
-      
-      // 1. Specific point (House number or Place name / POI)
+
+      // 1. Specific point — priority: house number > POI name > named OSM feature (landmark)
       const extratags = data.extratags ?? {};
       const houseNum = addr.house_number || extratags['addr:housenumber'] || addr.building;
       const poiName = addr.amenity || addr.shop || addr.office || addr.tourism || addr.leisure || addr.industrial;
-      
-      const point = (houseNum && poiName) ? `${houseNum}, ${poiName}` : (houseNum || poiName);
+      // data.name is the name of the matched OSM object (e.g. "Trường THPT Hóc Môn")
+      const osmName = data.name && data.name !== addr.road ? data.name : null;
+
+      let point: string | null = null;
+      if (houseNum && poiName) point = `${houseNum}, ${poiName}`;
+      else if (houseNum) point = houseNum;
+      else if (poiName) point = poiName;
+      else if (osmName) point = `Gần ${osmName}`;
       if (point) parts.push(point);
 
       // 2. Road

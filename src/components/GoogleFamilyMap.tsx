@@ -129,7 +129,7 @@ function getFreshnessColor(member: FamilyMemberWithProfile, language: 'vi' | 'en
   }
   if (isActuallyClosed) {
     const timeStr = diffMin < 1 ? text.justNow : `${text.lastSeenPrefix} ${Math.round(diffMin)} ${text.lastSeenSuffix}`;
-    return { dot: '#818cf8', label: timeStr, isOffline: true };
+    return { dot: '#a855f7', label: timeStr, isOffline: true };
   }
   
   return { dot: '#cbd5e1', label: text.offline, isOffline: true };

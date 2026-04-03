@@ -188,7 +188,7 @@ export default function MemberActionSheet({
     : (isActuallyBackground || isActuallyClosed) 
         ? formatAccessTime(diffMin)
         : isActuallySignedOut ? t.offline : t.disconnected;
-  const freshnessColor = isActuallyOnline ? 'bg-emerald-500' : isActuallyBackground ? 'bg-orange-500' : isActuallyClosed ? 'bg-indigo-400' : 'bg-slate-300';
+  const freshnessColor = isActuallyOnline ? 'bg-emerald-500' : isActuallyBackground ? 'bg-orange-500' : isActuallyClosed ? 'bg-purple-500' : 'bg-slate-300';
   const showBadge = !isActuallySignedOut;
 
   const handleNavigateTo = (type: 'google' | 'apple') => {
@@ -244,7 +244,7 @@ export default function MemberActionSheet({
           </h3>
           <div className="flex flex-wrap gap-2 align-center">
             {showBadge && (
-              <Badge variant="outline" className={cn("text-xs uppercase font-bold px-2.5 h-6 rounded-md shadow-sm", isActuallyOnline ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5" : (isActuallyBackground ? "text-orange-500 border-orange-500/30" : "text-indigo-400 border-indigo-400/30"))}>
+              <Badge variant="outline" className={cn("text-xs uppercase font-bold px-2.5 h-6 rounded-md shadow-sm", isActuallyOnline ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5" : (isActuallyBackground ? "text-orange-500 border-orange-500/30" : "text-purple-500 border-purple-500/30"))}>
                 {freshnessLabel}
               </Badge>
             )}
