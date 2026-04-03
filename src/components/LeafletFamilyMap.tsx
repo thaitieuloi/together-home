@@ -160,6 +160,7 @@ export default function LeafletFamilyMap({
   onRefresh,
   isRefreshing,
   playbackPoint,
+  onFitAllMembers,
 }: Props) {
   const { language } = useLanguage();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
