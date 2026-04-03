@@ -7,8 +7,8 @@ const cache = new Map<string, string>();
 const inFlight = new Map<string, Promise<string>>();
 
 function getCacheKey(lat: number, lng: number): string {
-  // Round to ~11m precision to maximize cache hits for nearby points
-  return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  // Round to ~1m precision for better house-level accuracy
+  return `${lat.toFixed(5)},${lng.toFixed(5)}`;
 }
 
 /** Convert lat/lng to human-readable address (Vietnamese preferred). */
