@@ -639,25 +639,52 @@ export default function LeafletFamilyMap({
     }
   }, [playbackPoint]);
 
+  const handleFitAllMembers = () => {
+    if (!mapRef.current || membersWithLocation.length === 0) return;
+    if (membersWithLocation.length === 1) {
+      const loc = membersWithLocation[0].location!;
+      mapRef.current.flyTo([loc.latitude, loc.longitude], 16, { duration: 1 });
+    } else {
+      const bounds = L.latLngBounds(
+        membersWithLocation.map(m => [m.location!.latitude, m.location!.longitude] as [number, number])
+      );
+      mapRef.current.flyToBounds(bounds, { padding: [60, 60], maxZoom: 16, duration: 1 });
+    }
+  };
+
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainerRef} className="w-full h-full" />
-      {onRefresh && (
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/90 backdrop-blur-sm border border-border/50 shadow-lg text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
-          title="Refresh locations"
-        >
-          <svg
-            className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2">
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/90 backdrop-blur-sm border border-border/50 shadow-lg text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+            title="Refresh locations"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {isRefreshing ? 'Đang cập nhật...' : 'Làm mới vị trí'}
-        </button>
-      )}
+            <svg
+              className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {isRefreshing ? 'Đang cập nhật...' : 'Làm mới vị trí'}
+          </button>
+        )}
+        {membersWithLocation.length > 1 && (
+          <button
+            onClick={handleFitAllMembers}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/90 backdrop-blur-sm border border-border/50 shadow-lg text-xs font-medium text-foreground hover:bg-accent transition-colors"
+            title="Xem tất cả thành viên"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+            Tất cả
+          </button>
+        )}
+      </div>
     </div>
   );
 }
