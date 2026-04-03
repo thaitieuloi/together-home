@@ -523,7 +523,7 @@ export default function LeafletFamilyMap({
   // Fly to member
   useEffect(() => {
     if (!mapRef.current || !flyTo) return;
-    mapRef.current.flyTo([flyTo.lat, flyTo.lng], 16, { duration: 1 });
+    mapRef.current.flyTo([flyTo.lat, flyTo.lng], 17, { duration: 1 });
   }, [flyTo]);
 
   // Draw history trail
