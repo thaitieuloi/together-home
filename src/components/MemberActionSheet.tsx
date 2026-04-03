@@ -34,7 +34,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { reverseGeocode } from '@/lib/geocoding';
+import { reverseGeocodeString } from '@/lib/geocoding';
 import { MapPin, AlertTriangle } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -154,7 +154,7 @@ export default function MemberActionSheet({
 
   useEffect(() => {
     if (member?.location) {
-      reverseGeocode(member.location.latitude, member.location.longitude).then(setAddress);
+      reverseGeocodeString(member.location.latitude, member.location.longitude).then(setAddress);
     } else {
       setAddress(null);
     }

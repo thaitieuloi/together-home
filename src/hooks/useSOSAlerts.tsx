@@ -44,8 +44,8 @@ export function useSOSAlerts() {
           } catch {}
 
           // Get address
-          const { reverseGeocode } = await import('@/lib/geocoding');
-          const address = await reverseGeocode(alert.latitude, alert.longitude);
+          const { reverseGeocodeString } = await import('@/lib/geocoding');
+          const address = await reverseGeocodeString(alert.latitude, alert.longitude);
 
           toast({
             title: '🆘 SOS Khẩn cấp!',
