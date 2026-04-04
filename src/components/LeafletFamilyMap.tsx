@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { calcSpeedKmh } from '@/lib/tripUtils';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
