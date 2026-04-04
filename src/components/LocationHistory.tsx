@@ -1059,7 +1059,7 @@ export default function LocationHistory({
                         <div className="flex items-center gap-1 bg-background/15 dark:bg-white/10 rounded-lg px-2 py-1">
                           <Gauge className="w-3 h-3 text-background/60 dark:text-foreground/60" />
                           <span className="text-[10px] font-bold tabular-nums text-background/80 dark:text-foreground/80">
-                            {Math.round(trail[playbackIndex].speed ?? 0)} {t.speed}
+                            {Math.round((trail[playbackIndex] as any).speed ?? 0)} {t.speed}
                           </span>
                         </div>
                       )}
