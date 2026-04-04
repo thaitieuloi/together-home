@@ -16,14 +16,14 @@ import {
   UtensilsCrossed, Coffee, ShoppingCart, TreePine,
   Dumbbell, Fuel, ParkingSquare, Church, Hotel,
   Film, Pin, MoreHorizontal, Eye, EyeOff,
-  ChevronLeft
+  ChevronLeft, ArrowDown, MoveRight
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, formatDistanceToNowStrict } from 'date-fns';
+import { format } from 'date-fns';
 import { vi as viLocale, enUS } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { getServerNow } from '@/lib/time';
-import { detectTrips, TripSegment, getActivityType, getActivityLabel } from '@/lib/tripUtils';
+import { detectTrips, TripSegment, getActivityType, calcSpeedKmh } from '@/lib/tripUtils';
 import {
   batchReverseGeocodeStructured,
   getCacheKey,
@@ -134,56 +134,39 @@ const TEXT = {
   },
 };
 
-// ─── Activity config ──────────────────────────────────────────────────────────
+// ─── Activity config (iSharing palette) ───────────────────────────────────────
 
 const ACTIVITY_CONFIG = {
   driving: {
     icon: Car,
     color: '#3B82F6',
-    gradient: 'from-blue-500 to-blue-600',
     bg: 'bg-blue-500/10',
     text: 'text-blue-600 dark:text-blue-400',
     label: { vi: 'Lái xe', en: 'Driving' },
-    lineColor: '#3B82F6',
   },
   cycling: {
     icon: Bike,
     color: '#10B981',
-    gradient: 'from-emerald-500 to-emerald-600',
     bg: 'bg-emerald-500/10',
     text: 'text-emerald-600 dark:text-emerald-400',
     label: { vi: 'Đạp xe', en: 'Cycling' },
-    lineColor: '#10B981',
   },
   walking: {
     icon: Footprints,
     color: '#F59E0B',
-    gradient: 'from-amber-500 to-amber-600',
     bg: 'bg-amber-500/10',
     text: 'text-amber-600 dark:text-amber-400',
     label: { vi: 'Đi bộ', en: 'Walking' },
-    lineColor: '#F59E0B',
   },
 } as const;
 
-// ─── Place category icons ─────────────────────────────────────────────────────
+// ─── Category icons ───────────────────────────────────────────────────────────
 
 const CATEGORY_ICONS: Record<PlaceCategory, React.ComponentType<any>> = {
-  home: Home,
-  work: Building2,
-  school: GraduationCap,
-  hospital: Stethoscope,
-  restaurant: UtensilsCrossed,
-  cafe: Coffee,
-  shop: ShoppingCart,
-  park: TreePine,
-  gym: Dumbbell,
-  gas_station: Fuel,
-  parking: ParkingSquare,
-  worship: Church,
-  hotel: Hotel,
-  entertainment: Film,
-  other: Pin,
+  home: Home, work: Building2, school: GraduationCap, hospital: Stethoscope,
+  restaurant: UtensilsCrossed, cafe: Coffee, shop: ShoppingCart, park: TreePine,
+  gym: Dumbbell, gas_station: Fuel, parking: ParkingSquare, worship: Church,
+  hotel: Hotel, entertainment: Film, other: Pin,
 };
 
 // ─── Day group ────────────────────────────────────────────────────────────────
@@ -233,10 +216,10 @@ function buildDayGroups(trips: TripSegment[], lang: 'vi' | 'en'): DayGroup[] {
 
 function formatDuration(min: number): string {
   if (min < 1) return '<1m';
-  if (min < 60) return `${Math.round(min)}m`;
+  if (min < 60) return `${Math.round(min)}p`;
   const h = Math.floor(min / 60);
   const m = Math.round(min % 60);
-  return m > 0 ? `${h}h${m}m` : `${h}h`;
+  return m > 0 ? `${h}h${m}p` : `${h}h`;
 }
 
 function formatDist(meters: number): string {
@@ -244,20 +227,12 @@ function formatDist(meters: number): string {
   return `${Math.round(meters)} m`;
 }
 
-function formatDistShort(km: number): string {
-  if (km >= 100) return `${Math.round(km)}`;
-  if (km >= 10) return km.toFixed(1);
-  return km.toFixed(1);
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export default function LocationHistory({
-  members,
-  onHistoryLoaded,
-  onClose,
-  onPlaybackChange,
-  initialMemberId,
+  members, onHistoryLoaded, onClose, onPlaybackChange, initialMemberId,
 }: Props) {
   const { language } = useLanguage();
   const t = TEXT[language];
@@ -276,19 +251,22 @@ export default function LocationHistory({
   const [customFrom, setCustomFrom] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [customTo, setCustomTo] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
-  const [expandedSegments, setExpandedSegments] = useState<Set<string>>(new Set());
-  const [isPlaybackMinimized, setIsPlaybackMinimized] = useState(false);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [isPlaybackMinimized, setIsPlaybackMinimized] = useState(false);
 
-  // Structured address cache
   const [addresses, setAddresses] = useState<Record<string, GeocodedAddress>>({});
   const segmentRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const trips = useMemo(() => detectTrips(trail), [trail]);
   const dayGroups = useMemo(() => buildDayGroups(trips, language), [trips, language]);
 
-  // ── Geocode all points (structured) ─────────────────────────────────────────
+  // Sorted trail (chronological, oldest first) for proper playback
+  const sortedTrail = useMemo(() =>
+    [...trail].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+    [trail]
+  );
+
+  // ── Geocode ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     const allPoints = trips.flatMap((s) =>
       s.type === 'trip'
@@ -304,10 +282,10 @@ export default function LocationHistory({
     });
   }, [trips]);
 
-  // ── Auto-scroll ─────────────────────────────────────────────────────────────
+  // ── Auto-scroll to active segment ───────────────────────────────────────────
   useEffect(() => {
     if (playbackIndex === -1) return;
-    const currentPoint = trail[playbackIndex];
+    const currentPoint = sortedTrail[playbackIndex];
     if (!currentPoint) return;
     const activeSeg = trips.find((seg) => seg.points.includes(currentPoint));
     if (activeSeg) {
@@ -316,9 +294,9 @@ export default function LocationHistory({
         block: 'nearest',
       });
     }
-  }, [playbackIndex, trail, trips]);
+  }, [playbackIndex, sortedTrail, trips]);
 
-  // ── Playback ────────────────────────────────────────────────────────────────
+  // ── Playback (now uses chronological order, slider goes left→right) ─────────
   const stopPlayback = useCallback(() => {
     if (playbackTimer) window.clearInterval(playbackTimer);
     setPlaybackTimer(null);
@@ -328,24 +306,22 @@ export default function LocationHistory({
   const startPlayback = useCallback(
     (speed: number) => {
       if (playbackTimer) window.clearInterval(playbackTimer);
-      const startIdx = playbackIndex <= 0 || playbackIndex >= trail.length - 1
-        ? trail.length - 1
-        : playbackIndex;
+      const startIdx = playbackIndex <= 0 ? 0 : playbackIndex;
       setPlaybackIndex(startIdx);
       setIsPlaying(true);
       const timer = window.setInterval(() => {
         setPlaybackIndex((prev) => {
-          if (prev <= 0) {
+          if (prev >= sortedTrail.length - 1) {
             window.clearInterval(timer);
             setIsPlaying(false);
-            return 0;
+            return sortedTrail.length - 1;
           }
-          return prev - 1;
+          return prev + 1;
         });
-      }, 500 / speed);
+      }, 400 / speed);
       setPlaybackTimer(timer);
     },
-    [playbackIndex, playbackTimer, trail.length]
+    [playbackIndex, playbackTimer, sortedTrail.length]
   );
 
   const togglePlayback = () => (isPlaying ? stopPlayback() : startPlayback(playbackSpeed));
@@ -359,27 +335,32 @@ export default function LocationHistory({
 
   const handleSeek = (index: number) => {
     setPlaybackIndex(index);
-    if (onPlaybackChange && trail[index]) onPlaybackChange(trail[index]);
+    if (onPlaybackChange && sortedTrail[index]) onPlaybackChange(sortedTrail[index]);
   };
 
   const handleSegmentClick = (seg: TripSegment) => {
     if (activeSegmentId === seg.startTime) {
-      // Unselect if clicked again
       setActiveSegmentId(null);
       onHistoryLoaded(trail, 'list');
       return;
     }
-
-    // Select this specific trip
     setActiveSegmentId(seg.startTime);
-    // Move playback to the start of this trip (latest index in the reversed array)
-    const tripStartPoint = seg.points[seg.points.length - 1];
-    const idx = trail.indexOf(tripStartPoint);
+    // Find this segment's first point in sortedTrail
+    const firstPoint = seg.points[0];
+    const idx = sortedTrail.indexOf(firstPoint);
     if (idx !== -1) handleSeek(idx);
-    
-    // Tell the map to only show lines for this segment
     onHistoryLoaded(seg.points, 'map');
   };
+
+  useEffect(() => {
+    if (playbackIndex !== -1 && onPlaybackChange && sortedTrail[playbackIndex]) {
+      onPlaybackChange(sortedTrail[playbackIndex]);
+    }
+  }, [playbackIndex, sortedTrail]);
+
+  useEffect(() => {
+    return () => { if (playbackTimer) window.clearInterval(playbackTimer); };
+  }, [playbackTimer]);
 
   // ── Data loading ──────────────────────────────────────────────────────────
   const loadHistory = useCallback(async () => {
@@ -398,9 +379,7 @@ export default function LocationHistory({
         until = new Date(`${customTo}T23:59:59`).toISOString();
       } else {
         const range = TIME_RANGES.find((r) => r.value === selectedRange);
-        since = new Date(
-          getServerNow().getTime() - (range?.hours ?? 3) * 60 * 60 * 1000
-        ).toISOString();
+        since = new Date(getServerNow().getTime() - (range?.hours ?? 3) * 60 * 60 * 1000).toISOString();
       }
 
       const query = supabase
@@ -411,9 +390,7 @@ export default function LocationHistory({
         .order('timestamp', { ascending: false })
         .limit(2000);
 
-      if (until) {
-        query.lte('timestamp', until);
-      }
+      if (until) query.lte('timestamp', until);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -421,7 +398,7 @@ export default function LocationHistory({
       const result = (data ?? []).filter(loc => loc.accuracy === null || loc.accuracy <= 300);
       setTrail(result);
       onHistoryLoaded(result, 'list');
-      if (result.length > 0) setPlaybackIndex(result.length - 1);
+      if (result.length > 0) setPlaybackIndex(0);
     } catch (err: any) {
       console.error('History load error:', err);
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -443,62 +420,45 @@ export default function LocationHistory({
     if (selectedMember) loadHistory();
   }, [selectedMember, selectedRange, useCustomRange, customFrom, customTo]);
 
-  useEffect(() => {
-    return () => { if (playbackTimer) window.clearInterval(playbackTimer); };
-  }, [playbackTimer]);
-
-  useEffect(() => {
-    if (playbackIndex !== -1 && onPlaybackChange && trail[playbackIndex]) {
-      onPlaybackChange(trail[playbackIndex]);
-    }
-  }, [playbackIndex, trail]);
-
   // ── Helpers ───────────────────────────────────────────────────────────────
   const getAddr = (lat: number, lng: number): GeocodedAddress | null => {
-    const key = getCacheKey(lat, lng);
-    return addresses[key] || null;
+    return addresses[getCacheKey(lat, lng)] || null;
   };
 
   const getAddrFull = (lat: number, lng: number): string => {
-    const addr = getAddr(lat, lng);
-    return addr?.full || t.noAddress;
+    return getAddr(lat, lng)?.full || t.noAddress;
   };
 
   const getAddrShort = (lat: number, lng: number): string => {
-    const addr = getAddr(lat, lng);
-    if (!addr) return '...';
-    return addr.short;
+    return getAddr(lat, lng)?.short || '...';
   };
 
   const getCategory = (lat: number, lng: number): PlaceCategory => {
-    const addr = getAddr(lat, lng);
-    return addr?.category || 'other';
+    return getAddr(lat, lng)?.category || 'other';
   };
 
-  const isSegmentActive = (seg: TripSegment): boolean =>
-    playbackIndex !== -1 && trail[playbackIndex] !== undefined && seg.points.includes(trail[playbackIndex]);
+  const isSegmentActive = (seg: TripSegment): boolean => {
+    if (playbackIndex === -1) return false;
+    const currentPoint = sortedTrail[playbackIndex];
+    return currentPoint !== undefined && seg.points.includes(currentPoint);
+  };
 
   const toggleDayCollapse = (dateKey: string) => {
     setCollapsedDays(prev => {
       const next = new Set(prev);
-      if (next.has(dateKey)) next.delete(dateKey);
-      else next.add(dateKey);
+      if (next.has(dateKey)) next.delete(dateKey); else next.add(dateKey);
       return next;
     });
   };
 
-  const toggleSegmentExpand = (key: string) => {
-    setExpandedSegments(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
+  // Current playback speed calculation
+  const currentSpeed = useMemo(() => {
+    if (playbackIndex <= 0 || playbackIndex >= sortedTrail.length) return 0;
+    return calcSpeedKmh(sortedTrail[playbackIndex - 1], sortedTrail[playbackIndex]);
+  }, [playbackIndex, sortedTrail]);
 
-  const currentTimestamp = playbackIndex !== -1 && trail[playbackIndex]
-    ? trail[playbackIndex].timestamp
-    : null;
+  const currentTimestamp = playbackIndex !== -1 && sortedTrail[playbackIndex]
+    ? sortedTrail[playbackIndex].timestamp : null;
 
   const selectedMemberProfile = members.find(m => m.user_id === selectedMember);
 
@@ -512,14 +472,14 @@ export default function LocationHistory({
       stayC += g.stayCount;
     }
     for (const seg of trips) {
-      if (seg.type === 'trip' && (seg.maxSpeed ?? 0) > maxSpd) {
-        maxSpd = seg.maxSpeed ?? 0;
-      }
+      if (seg.type === 'trip' && (seg.maxSpeed ?? 0) > maxSpd) maxSpd = seg.maxSpeed ?? 0;
     }
     return { dist, moving, tripC, stayC, maxSpd };
   }, [dayGroups, trips]);
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ═════════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═════════════════════════════════════════════════════════════════════════════
   return (
     <Sheet open={true} onOpenChange={(open) => !open && onClose()} modal={false}>
       <SheetContent
@@ -532,7 +492,6 @@ export default function LocationHistory({
       >
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="shrink-0">
-          {/* Title bar */}
           <div className="flex items-center justify-between px-5 pt-5 pb-2">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center ring-1 ring-primary/10">
@@ -548,8 +507,7 @@ export default function LocationHistory({
               </div>
             </div>
             <Button
-              variant="ghost"
-              size="icon"
+              variant="ghost" size="icon"
               className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/60"
               onClick={onClose}
             >
@@ -571,7 +529,7 @@ export default function LocationHistory({
                         "w-2.5 h-2.5 rounded-full ring-2 ring-offset-1 ring-offset-background",
                         m.profile.status === 'online' ? 'bg-emerald-500 ring-emerald-500/30' :
                         m.profile.status === 'idle' ? 'bg-orange-500 ring-orange-500/30' :
-                        m.profile.status === 'offline' ? 'bg-purple-500 ring-purple-500/30' : 'bg-slate-400 ring-slate-400/30'
+                        'bg-slate-400 ring-slate-400/30'
                       )} />
                       <span className="font-semibold">{m.profile.display_name}</span>
                     </div>
@@ -581,7 +539,7 @@ export default function LocationHistory({
             </Select>
           </div>
 
-          {/* Time range chips */}
+          {/* Time chips */}
           <div className="flex items-center gap-1.5 px-5 pb-3 overflow-x-auto no-scrollbar">
             <button
               onClick={loadHistory}
@@ -617,43 +575,30 @@ export default function LocationHistory({
             </button>
           </div>
 
-          {/* Custom date range */}
+          {/* Custom date */}
           {showFilters && (
             <div className="px-5 pb-3 animate-in slide-in-from-top-2 duration-200">
               <div className="bg-muted/30 rounded-xl p-3 space-y-2.5">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">{t.fromDate}</label>
-                    <input
-                      type="date"
-                      value={customFrom}
-                      onChange={(e) => setCustomFrom(e.target.value)}
-                      className="w-full h-9 bg-background/80 border border-border/30 rounded-lg px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
+                    <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                      className="w-full h-9 bg-background/80 border border-border/30 rounded-lg px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">{t.toDate}</label>
-                    <input
-                      type="date"
-                      value={customTo}
-                      onChange={(e) => setCustomTo(e.target.value)}
-                      className="w-full h-9 bg-background/80 border border-border/30 rounded-lg px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
+                    <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                      className="w-full h-9 bg-background/80 border border-border/30 rounded-lg px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30" />
                   </div>
                 </div>
-                <Button
-                  onClick={() => { setUseCustomRange(true); loadHistory(); }}
-                  disabled={loading}
-                  size="sm"
-                  className="w-full h-8 rounded-lg text-xs font-bold"
-                >
+                <Button onClick={() => { setUseCustomRange(true); loadHistory(); }} disabled={loading}
+                  size="sm" className="w-full h-8 rounded-lg text-xs font-bold">
                   {t.apply}
                 </Button>
               </div>
             </div>
           )}
 
-          {/* Divider */}
           <div className="h-px bg-gradient-to-r from-transparent via-border/40 to-transparent" />
         </div>
 
@@ -680,431 +625,50 @@ export default function LocationHistory({
             </div>
           ) : (
             <>
-              {/* ── Enhanced Summary ─────────────────────────────────────── */}
-              <div className="shrink-0 px-4 py-3.5 bg-gradient-to-b from-muted/30 to-transparent">
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Distance card */}
-                  <div className="bg-background/70 rounded-xl p-3 border border-border/15 shadow-sm">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <Route className="w-3.5 h-3.5 text-primary/70" />
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t.totalDist}</span>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-black text-foreground tabular-nums tracking-tight">
-                        {formatDistShort(totalStats.dist)}
-                      </span>
-                      <span className="text-[11px] font-bold text-muted-foreground">km</span>
-                    </div>
-                  </div>
+              {/* ── Summary Cards (iSharing style) ──────────────────────── */}
+              <SummaryCards stats={totalStats} t={t} />
 
-                  {/* Moving time card */}
-                  <div className="bg-background/70 rounded-xl p-3 border border-border/15 shadow-sm">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <Timer className="w-3.5 h-3.5 text-primary/70" />
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{t.movingTime}</span>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-black text-foreground tabular-nums tracking-tight">
-                        {formatDuration(totalStats.moving)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Stats badges row */}
-                <div className="flex items-center gap-2 mt-2.5">
-                  <div className="flex items-center gap-1.5 bg-primary/8 rounded-lg px-2.5 py-1.5">
-                    <Navigation className="w-3 h-3 text-primary" />
-                    <span className="text-[11px] font-bold text-primary">{totalStats.tripC} {t.trips}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-orange-500/8 rounded-lg px-2.5 py-1.5">
-                    <MapPin className="w-3 h-3 text-orange-500" />
-                    <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400">{totalStats.stayC} {t.stops}</span>
-                  </div>
-                  {totalStats.maxSpd > 0 && (
-                    <div className="flex items-center gap-1.5 bg-red-500/8 rounded-lg px-2.5 py-1.5 ml-auto">
-                      <Gauge className="w-3 h-3 text-red-500" />
-                      <span className="text-[11px] font-bold text-red-600 dark:text-red-400">
-                        {Math.round(totalStats.maxSpd)} {t.speed}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ── Trip Timeline ────────────────────────────────────────── */}
-              <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef as any}>
+              {/* ── Timeline ─────────────────────────────────────────────── */}
+              <ScrollArea className="flex-1 min-h-0">
                 <div className="pb-36">
-                  {dayGroups.map((group) => {
-                    const isCollapsed = collapsedDays.has(group.dateKey);
-
-                    return (
-                      <div key={group.dateKey}>
-                        {/* Day header */}
-                        <button
-                          onClick={() => toggleDayCollapse(group.dateKey)}
-                          className="w-full flex items-center justify-between px-5 py-3 bg-muted/30 hover:bg-muted/50 transition-colors sticky top-0 z-10"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                              <Calendar className="w-3.5 h-3.5 text-primary" />
-                            </div>
-                            <div className="text-left">
-                              <span className="text-[13px] font-bold text-foreground block leading-tight">{group.dateLabel}</span>
-                              <span className="text-[10px] font-medium text-muted-foreground">
-                                {group.tripCount} {t.trips} · {group.stayCount} {t.stops}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-bold text-primary tabular-nums">
-                              {group.totalDistKm.toFixed(1)} km
-                            </span>
-                            <div className={cn(
-                              "w-5 h-5 rounded-md flex items-center justify-center transition-transform duration-200",
-                              isCollapsed ? "" : "rotate-90"
-                            )}>
-                              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                            </div>
-                          </div>
-                        </button>
-
-                        {/* Segments */}
-                        {!isCollapsed && (
-                          <div className="relative">
-                            {group.segments.map((seg, i) => {
-                              const active = isSegmentActive(seg) || activeSegmentId === seg.startTime;
-                              const isTrip = seg.type === 'trip';
-                              const actType = isTrip ? getActivityType(seg.avgSpeed ?? 0) : null;
-                              const actConfig = actType ? ACTIVITY_CONFIG[actType] : null;
-                              const isExpanded = expandedSegments.has(seg.startTime);
-                              const isLast = i === group.segments.length - 1;
-                              const category = !isTrip ? getCategory(seg.startLocation.lat, seg.startLocation.lng) : 'other';
-                              const categoryConfig = CATEGORY_CONFIG[category];
-                              const CategoryIcon = CATEGORY_ICONS[category];
-
-                              return (
-                                <div key={seg.startTime}>
-                                  {isTrip ? (
-                                    /* ── Trip Segment ─────────────────────────── */
-                                    <div
-                                      ref={(el) => { segmentRefs.current[seg.startTime] = el; }}
-                                      className={cn(
-                                        'relative transition-all duration-200',
-                                        active ? 'bg-primary/5' : ''
-                                      )}
-                                    >
-                                      {/* Trip connector line */}
-                                      <div className="flex">
-                                        {/* Left timeline column */}
-                                        <div className="w-14 shrink-0 flex flex-col items-center relative">
-                                          <div
-                                            className="w-0.5 flex-1 opacity-60"
-                                            style={{
-                                              background: `repeating-linear-gradient(to bottom, ${actConfig?.lineColor || '#94A3B8'} 0, ${actConfig?.lineColor || '#94A3B8'} 4px, transparent 4px, transparent 8px)`
-                                            }}
-                                          />
-                                        </div>
-
-                                        {/* Trip card */}
-                                        <div
-                                          className={cn(
-                                            'flex-1 mr-4 my-1 cursor-pointer group'
-                                          )}
-                                          onClick={() => handleSegmentClick(seg)}
-                                        >
-                                          <div className={cn(
-                                            "rounded-xl border p-3 transition-all duration-200",
-                                            active
-                                              ? "border-primary/30 bg-primary/5 shadow-sm shadow-primary/10"
-                                              : "border-border/15 bg-muted/20 hover:bg-muted/40 hover:border-border/30"
-                                          )}>
-                                            {/* Activity type + duration header */}
-                                            <div className="flex items-center justify-between mb-2">
-                                              <div className="flex items-center gap-2">
-                                                {actConfig && (
-                                                  <div className={cn(
-                                                    "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold",
-                                                    actConfig.bg, actConfig.text
-                                                  )}>
-                                                    <actConfig.icon className="w-3 h-3" />
-                                                    {actConfig.label[language]}
-                                                  </div>
-                                                )}
-                                                <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
-                                                  {format(new Date(seg.startTime), 'HH:mm')} → {format(new Date(seg.endTime), 'HH:mm')}
-                                                </span>
-                                              </div>
-                                              <span className="text-[11px] font-bold text-foreground tabular-nums">
-                                                {formatDuration(seg.durationMinutes)}
-                                              </span>
-                                            </div>
-
-                                            {/* Route visual: From → To */}
-                                            <div className="relative pl-4 space-y-1 mb-2.5">
-                                              {/* Vertical route line */}
-                                              <div className="absolute left-[3px] top-[7px] bottom-[7px] w-0.5 bg-gradient-to-b from-emerald-500 via-muted-foreground/20 to-red-500 rounded-full" />
-
-                                              {/* Start point */}
-                                              <div className="flex items-start gap-2 relative">
-                                                <div className="absolute -left-4 top-[3px] w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20 z-10" />
-                                                <p className="text-[11px] text-foreground/80 leading-snug line-clamp-2 pl-0.5">
-                                                  {getAddrShort(seg.startLocation.lat, seg.startLocation.lng)}
-                                                </p>
-                                              </div>
-
-                                              {/* End point */}
-                                              <div className="flex items-start gap-2 relative">
-                                                <div className="absolute -left-4 top-[3px] w-2 h-2 rounded-full bg-red-500 ring-2 ring-red-500/20 z-10" />
-                                                <p className="text-[11px] text-foreground/80 leading-snug line-clamp-2 pl-0.5">
-                                                  {getAddrShort(seg.endLocation.lat, seg.endLocation.lng)}
-                                                </p>
-                                              </div>
-                                            </div>
-
-                                            {/* Stats pills */}
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md">
-                                                <Route className="w-2.5 h-2.5" />
-                                                {formatDist(seg.distance ?? 0)}
-                                              </span>
-                                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md">
-                                                <Gauge className="w-2.5 h-2.5" />
-                                                ⌀ {Math.round(seg.avgSpeed ?? 0)} {t.speed}
-                                              </span>
-                                              {(seg.maxSpeed ?? 0) > 0 && (
-                                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md">
-                                                  <TrendingUp className="w-2.5 h-2.5" />
-                                                  {t.maxSpeed} {Math.round(seg.maxSpeed ?? 0)}
-                                                </span>
-                                              )}
-                                              <span className="text-[9px] font-medium text-muted-foreground/60 ml-auto tabular-nums">
-                                                {seg.points.length} {t.points}
-                                              </span>
-                                            </div>
-
-                                            {/* Expanded: Full addresses */}
-                                            {isExpanded && (
-                                              <div className="mt-2.5 pt-2.5 border-t border-border/15 space-y-2 animate-in slide-in-from-top-1 duration-200">
-                                                <div>
-                                                  <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">{t.from}</span>
-                                                  <p className="text-[11px] text-foreground/70 mt-0.5 leading-relaxed">
-                                                    {getAddrFull(seg.startLocation.lat, seg.startLocation.lng)}
-                                                  </p>
-                                                </div>
-                                                <div>
-                                                  <span className="text-[9px] font-bold text-red-600 uppercase tracking-wider">{t.to}</span>
-                                                  <p className="text-[11px] text-foreground/70 mt-0.5 leading-relaxed">
-                                                    {getAddrFull(seg.endLocation.lat, seg.endLocation.lng)}
-                                                  </p>
-                                                </div>
-                                              </div>
-                                            )}
-
-                                            {/* Expand toggle */}
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                toggleSegmentExpand(seg.startTime);
-                                              }}
-                                              className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-primary/60 hover:text-primary transition-colors"
-                                            >
-                                              {isExpanded ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                                              {isExpanded ? t.hideDetails : t.showDetails}
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    /* ── Stay Segment ───────────────────────────── */
-                                    <div
-                                      ref={(el) => { segmentRefs.current[seg.startTime] = el; }}
-                                      onClick={() => handleSegmentClick(seg)}
-                                      className={cn(
-                                        'relative flex cursor-pointer transition-all duration-200 group',
-                                        active ? 'bg-orange-500/5' : 'hover:bg-muted/30'
-                                      )}
-                                    >
-                                      {/* Left timeline column */}
-                                      <div className="w-14 shrink-0 flex flex-col items-center py-3">
-                                        {/* Top line */}
-                                        {i > 0 && <div className="w-0.5 h-2 bg-border/30" />}
-
-                                        {/* Stay node */}
-                                        <div className={cn(
-                                          "w-9 h-9 rounded-xl flex items-center justify-center border-2 transition-all",
-                                          active
-                                            ? "border-orange-500 bg-orange-500/10 scale-110 shadow-sm shadow-orange-500/20"
-                                            : "border-border/30 bg-background group-hover:border-border/50"
-                                        )}>
-                                          <CategoryIcon className="w-4 h-4" style={{ color: categoryConfig.color }} />
-                                        </div>
-
-                                        {/* Bottom line */}
-                                        {!isLast && <div className="w-0.5 flex-1 bg-border/30 mt-px" />}
-                                      </div>
-
-                                      {/* Content */}
-                                      <div className="flex-1 pr-4 py-3 min-w-0">
-                                        {/* Time + Duration header */}
-                                        <div className="flex items-center justify-between mb-1">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="text-[11px] font-bold tabular-nums text-foreground">
-                                              {format(new Date(seg.startTime), 'HH:mm')}
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground/40">—</span>
-                                            <span className="text-[11px] font-bold tabular-nums text-foreground">
-                                              {format(new Date(seg.endTime), 'HH:mm')}
-                                            </span>
-                                          </div>
-                                          <div className={cn(
-                                            "flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold",
-                                            seg.durationMinutes >= 60
-                                              ? "bg-orange-500/10 text-orange-600 dark:text-orange-400"
-                                              : "bg-muted/50 text-muted-foreground"
-                                          )}>
-                                            <Clock className="w-2.5 h-2.5" />
-                                            {formatDuration(seg.durationMinutes)}
-                                          </div>
-                                        </div>
-
-                                        {/* Address (full) */}
-                                        <p className={cn(
-                                          "text-[12px] font-medium leading-snug",
-                                          active ? "text-foreground" : "text-foreground/80"
-                                        )}>
-                                          {getAddrFull(seg.startLocation.lat, seg.startLocation.lng)}
-                                        </p>
-
-                                        {/* Category label */}
-                                        {category !== 'other' && (
-                                          <div className="flex items-center gap-1 mt-1.5">
-                                            <span className="text-sm">{categoryConfig.emoji}</span>
-                                            <span className="text-[10px] font-semibold" style={{ color: categoryConfig.color }}>
-                                              {categoryConfig.label[language]}
-                                            </span>
-                                          </div>
-                                        )}
-
-                                        {/* House number highlight if available */}
-                                        {(() => {
-                                          const addr = getAddr(seg.startLocation.lat, seg.startLocation.lng);
-                                          if (addr?.houseNumber && addr?.road) {
-                                            return (
-                                              <div className="flex items-center gap-1.5 mt-1.5 bg-blue-500/8 rounded-md px-2 py-1 w-fit">
-                                                <Home className="w-3 h-3 text-blue-500" />
-                                                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                                                  {addr.houseNumber} {addr.road}
-                                                </span>
-                                              </div>
-                                            );
-                                          }
-                                          return null;
-                                        })()}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {dayGroups.map((group) => (
+                    <DaySection
+                      key={group.dateKey}
+                      group={group}
+                      isCollapsed={collapsedDays.has(group.dateKey)}
+                      onToggle={() => toggleDayCollapse(group.dateKey)}
+                      activeSegmentId={activeSegmentId}
+                      isSegmentActive={isSegmentActive}
+                      onSegmentClick={handleSegmentClick}
+                      getAddrShort={getAddrShort}
+                      getAddrFull={getAddrFull}
+                      getCategory={getCategory}
+                      getAddr={getAddr}
+                      language={language}
+                      t={t}
+                      segmentRefs={segmentRefs}
+                    />
+                  ))}
                 </div>
               </ScrollArea>
 
-              {/* ── Playback Bar (Dynamic Island style) ────────────────────── */}
-              {trail.length > 0 && !loading && (
-                <div className={cn(
-                  "absolute left-4 right-4 z-40 transition-all duration-500 ease-in-out",
-                  isPlaybackMinimized ? "bottom-[-100px] opacity-0 pointer-events-none" : "bottom-6 opacity-100"
-                )}>
-                  <div className="bg-foreground/95 dark:bg-background/95 backdrop-blur-xl rounded-2xl p-3.5 shadow-[0_16px_48px_rgba(0,0,0,0.25)] border border-white/5 relative group">
-                    {/* Minimize toggle */}
-                    <button
-                      onClick={() => setIsPlaybackMinimized(true)}
-                      className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-6 bg-foreground/95 dark:bg-background/95 border border-white/5 rounded-t-lg flex items-center justify-center cursor-pointer hover:bg-foreground dark:hover:bg-background transition-colors"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5 text-background/70 dark:text-foreground/70" />
-                    </button>
-
-                    {/* Slider */}
-                    <input
-                      type="range"
-                      min="0"
-                      max={trail.length - 1}
-                      value={playbackIndex === -1 ? trail.length - 1 : playbackIndex}
-                      onChange={(e) => handleSeek(parseInt(e.target.value))}
-                      className="w-full h-1 rounded-full appearance-none cursor-pointer mb-3 playback-slider"
-                      dir="rtl"
-                    />
-
-                    {/* Controls row */}
-                    <div className="flex items-center justify-between">
-                      {/* Time display */}
-                      <div className="flex flex-col">
-                        <span className="text-[12px] font-black tabular-nums text-background dark:text-foreground">
-                          {currentTimestamp ? format(new Date(currentTimestamp), 'HH:mm:ss') : '--:--'}
-                        </span>
-                        <span className="text-[9px] font-semibold text-background/50 dark:text-foreground/50 tabular-nums">
-                          {currentTimestamp ? format(new Date(currentTimestamp), 'dd/MM/yyyy') : ''}
-                        </span>
-                      </div>
-
-                      {/* Current speed indicator */}
-                      {playbackIndex !== -1 && trail[playbackIndex] && (
-                        <div className="flex items-center gap-1 bg-background/15 dark:bg-white/10 rounded-lg px-2 py-1">
-                          <Gauge className="w-3 h-3 text-background/60 dark:text-foreground/60" />
-                          <span className="text-[10px] font-bold tabular-nums text-background/80 dark:text-foreground/80">
-                            {Math.round((trail[playbackIndex] as any).speed ?? 0)} {t.speed}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Play controls */}
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={togglePlayback}
-                          className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90",
-                            isPlaying
-                              ? "bg-primary text-white shadow-lg shadow-primary/30"
-                              : "bg-background/20 dark:bg-white/10 text-background dark:text-foreground hover:bg-background/30 dark:hover:bg-white/15"
-                          )}
-                        >
-                          {isPlaying
-                            ? <Pause className="w-4 h-4" />
-                            : <Play className="w-4 h-4 ml-0.5" />
-                          }
-                        </button>
-
-                        <button
-                          onClick={nextPlaybackSpeed}
-                          className="h-8 px-2.5 rounded-lg bg-background/15 dark:bg-white/10 text-[10px] font-black text-background dark:text-foreground transition-all active:scale-95 hover:bg-background/25 dark:hover:bg-white/15 tabular-nums"
-                        >
-                          {playbackSpeed}×
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Floating Re-open Button when hidden */}
-              {trail.length > 0 && !loading && (
-                <button
-                  onClick={() => setIsPlaybackMinimized(false)}
-                  className={cn(
-                    "absolute right-4 bottom-6 w-12 h-12 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.2)] bg-foreground/95 dark:bg-background/95 backdrop-blur-xl border border-white/5 flex items-center justify-center text-background dark:text-foreground transition-all duration-300 z-50",
-                    isPlaybackMinimized ? "scale-100 opacity-100 translate-y-0" : "scale-50 opacity-0 translate-y-8 pointer-events-none"
-                  )}
-                >
-                  <PlayCircle className="w-6 h-6" />
-                </button>
-              )}
+              {/* ── Playback Bar ──────────────────────────────────────────── */}
+              <PlaybackBar
+                trail={sortedTrail}
+                playbackIndex={playbackIndex}
+                isPlaying={isPlaying}
+                playbackSpeed={playbackSpeed}
+                currentSpeed={currentSpeed}
+                currentTimestamp={currentTimestamp}
+                isMinimized={isPlaybackMinimized}
+                onSeek={handleSeek}
+                onTogglePlay={togglePlayback}
+                onNextSpeed={nextPlaybackSpeed}
+                onMinimize={() => setIsPlaybackMinimized(true)}
+                onRestore={() => setIsPlaybackMinimized(false)}
+                loading={loading}
+                t={t}
+              />
             </>
           )}
         </div>
@@ -1128,5 +692,455 @@ export default function LocationHistory({
         `}} />
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SUB-COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Summary Cards ─────────────────────────────────────────────────────────────
+
+function SummaryCards({ stats, t }: { stats: { dist: number; moving: number; tripC: number; stayC: number; maxSpd: number }; t: typeof TEXT['vi'] }) {
+  return (
+    <div className="shrink-0 px-4 py-3 bg-gradient-to-b from-muted/25 to-transparent">
+      {/* Main stats */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 bg-background/70 rounded-xl p-3 border border-border/15 shadow-sm">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Route className="w-3.5 h-3.5 text-primary/70" />
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{t.totalDist}</span>
+          </div>
+          <span className="text-lg font-black text-foreground tabular-nums">
+            {stats.dist >= 100 ? Math.round(stats.dist) : stats.dist.toFixed(1)} <span className="text-[10px] font-bold text-muted-foreground">km</span>
+          </span>
+        </div>
+        <div className="flex-1 bg-background/70 rounded-xl p-3 border border-border/15 shadow-sm">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Timer className="w-3.5 h-3.5 text-primary/70" />
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{t.movingTime}</span>
+          </div>
+          <span className="text-lg font-black text-foreground tabular-nums">
+            {formatDuration(stats.moving)}
+          </span>
+        </div>
+      </div>
+
+      {/* Badges */}
+      <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-1.5 bg-primary/8 rounded-lg px-2.5 py-1">
+          <Navigation className="w-3 h-3 text-primary" />
+          <span className="text-[10px] font-bold text-primary">{stats.tripC} {t.trips}</span>
+        </div>
+        <div className="flex items-center gap-1.5 bg-orange-500/8 rounded-lg px-2.5 py-1">
+          <MapPin className="w-3 h-3 text-orange-500" />
+          <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400">{stats.stayC} {t.stops}</span>
+        </div>
+        {stats.maxSpd > 0 && (
+          <div className="flex items-center gap-1.5 bg-red-500/8 rounded-lg px-2.5 py-1 ml-auto">
+            <Gauge className="w-3 h-3 text-red-500" />
+            <span className="text-[10px] font-bold text-red-600 dark:text-red-400">{Math.round(stats.maxSpd)} {t.speed}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Day Section ───────────────────────────────────────────────────────────────
+
+function DaySection({
+  group, isCollapsed, onToggle, activeSegmentId, isSegmentActive,
+  onSegmentClick, getAddrShort, getAddrFull, getCategory, getAddr,
+  language, t, segmentRefs,
+}: {
+  group: DayGroup;
+  isCollapsed: boolean;
+  onToggle: () => void;
+  activeSegmentId: string | null;
+  isSegmentActive: (seg: TripSegment) => boolean;
+  onSegmentClick: (seg: TripSegment) => void;
+  getAddrShort: (lat: number, lng: number) => string;
+  getAddrFull: (lat: number, lng: number) => string;
+  getCategory: (lat: number, lng: number) => PlaceCategory;
+  getAddr: (lat: number, lng: number) => GeocodedAddress | null;
+  language: 'vi' | 'en';
+  t: typeof TEXT['vi'];
+  segmentRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+}) {
+  return (
+    <div>
+      {/* Day header */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-2.5 bg-muted/25 hover:bg-muted/40 transition-colors sticky top-0 z-10 border-b border-border/10"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Calendar className="w-3.5 h-3.5 text-primary" />
+          </div>
+          <div className="text-left">
+            <span className="text-[13px] font-bold text-foreground block leading-tight">{group.dateLabel}</span>
+            <span className="text-[10px] font-medium text-muted-foreground">
+              {group.tripCount} {t.trips} · {group.stayCount} {t.stops}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-primary tabular-nums">
+            {group.totalDistKm.toFixed(1)} km
+          </span>
+          <ChevronRight className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform duration-200", !isCollapsed && "rotate-90")} />
+        </div>
+      </button>
+
+      {/* Segments */}
+      {!isCollapsed && (
+        <div className="relative pl-2">
+          {group.segments.map((seg, i) => {
+            const active = isSegmentActive(seg) || activeSegmentId === seg.startTime;
+            const isLast = i === group.segments.length - 1;
+
+            return seg.type === 'trip' ? (
+              <TripCard
+                key={seg.startTime}
+                seg={seg}
+                active={active}
+                isLast={isLast}
+                onSegmentClick={onSegmentClick}
+                getAddrShort={getAddrShort}
+                language={language}
+                t={t}
+                segmentRefs={segmentRefs}
+              />
+            ) : (
+              <StayCard
+                key={seg.startTime}
+                seg={seg}
+                active={active}
+                isFirst={i === 0}
+                isLast={isLast}
+                onSegmentClick={onSegmentClick}
+                getAddrFull={getAddrFull}
+                getCategory={getCategory}
+                getAddr={getAddr}
+                language={language}
+                t={t}
+                segmentRefs={segmentRefs}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Trip Card (iSharing style: compact connector between stays) ───────────────
+
+function TripCard({
+  seg, active, isLast, onSegmentClick, getAddrShort, language, t, segmentRefs,
+}: {
+  seg: TripSegment;
+  active: boolean;
+  isLast: boolean;
+  onSegmentClick: (seg: TripSegment) => void;
+  getAddrShort: (lat: number, lng: number) => string;
+  language: 'vi' | 'en';
+  t: typeof TEXT['vi'];
+  segmentRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+}) {
+  const actType = getActivityType(seg.avgSpeed ?? 0);
+  const actConfig = ACTIVITY_CONFIG[actType];
+  const ActIcon = actConfig.icon;
+
+  return (
+    <div
+      ref={(el) => { segmentRefs.current[seg.startTime] = el; }}
+      className={cn("flex transition-all duration-200", active ? "bg-primary/5" : "")}
+    >
+      {/* Timeline column */}
+      <div className="w-12 shrink-0 flex flex-col items-center">
+        <div className="w-0.5 h-3 bg-border/20" />
+        <div
+          className={cn(
+            "w-8 h-8 rounded-full flex items-center justify-center border-2 shrink-0 transition-all",
+            active
+              ? "border-primary bg-primary/10 scale-110 shadow-sm shadow-primary/20"
+              : "border-border/30 bg-muted/30"
+          )}
+          style={{ borderColor: active ? actConfig.color : undefined }}
+        >
+          <ActIcon className="w-3.5 h-3.5" style={{ color: actConfig.color }} />
+        </div>
+        <div className={cn("w-0.5 flex-1", isLast ? "bg-transparent" : "bg-border/20")} />
+      </div>
+
+      {/* Content */}
+      <div
+        className="flex-1 pr-4 py-2 cursor-pointer group"
+        onClick={() => onSegmentClick(seg)}
+      >
+        <div className={cn(
+          "rounded-xl border p-2.5 transition-all duration-200",
+          active
+            ? "border-primary/30 bg-primary/5 shadow-sm"
+            : "border-border/10 bg-muted/15 hover:bg-muted/30 hover:border-border/25"
+        )}>
+          {/* Header: activity + time */}
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-md", actConfig.bg, actConfig.text)}>
+                {actConfig.label[language]}
+              </span>
+              <span className="text-[10px] text-muted-foreground tabular-nums">
+                {format(new Date(seg.startTime), 'HH:mm')} → {format(new Date(seg.endTime), 'HH:mm')}
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-foreground/70 tabular-nums">
+              {formatDuration(seg.durationMinutes)}
+            </span>
+          </div>
+
+          {/* Route: From → To */}
+          <div className="relative pl-3.5 space-y-0.5 mb-2">
+            <div className="absolute left-[3px] top-[5px] bottom-[5px] w-0.5 bg-gradient-to-b from-emerald-500/60 to-red-500/60 rounded-full" />
+            <div className="flex items-center gap-1.5 relative">
+              <div className="absolute -left-3.5 top-[4px] w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <p className="text-[11px] text-foreground/70 leading-snug line-clamp-1">
+                {getAddrShort(seg.startLocation.lat, seg.startLocation.lng)}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 relative">
+              <div className="absolute -left-3.5 top-[4px] w-1.5 h-1.5 rounded-full bg-red-500" />
+              <p className="text-[11px] text-foreground/70 leading-snug line-clamp-1">
+                {getAddrShort(seg.endLocation.lat, seg.endLocation.lng)}
+              </p>
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded">
+              <Route className="w-2.5 h-2.5" />
+              {formatDist(seg.distance ?? 0)}
+            </span>
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded">
+              <Gauge className="w-2.5 h-2.5" />
+              ⌀{Math.round(seg.avgSpeed ?? 0)}
+            </span>
+            {(seg.maxSpeed ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded">
+                <TrendingUp className="w-2.5 h-2.5" />
+                ↑{Math.round(seg.maxSpeed ?? 0)}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Stay Card (iSharing style: place-centric with icon + address) ─────────────
+
+function StayCard({
+  seg, active, isFirst, isLast, onSegmentClick, getAddrFull, getCategory, getAddr,
+  language, t, segmentRefs,
+}: {
+  seg: TripSegment;
+  active: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onSegmentClick: (seg: TripSegment) => void;
+  getAddrFull: (lat: number, lng: number) => string;
+  getCategory: (lat: number, lng: number) => PlaceCategory;
+  getAddr: (lat: number, lng: number) => GeocodedAddress | null;
+  language: 'vi' | 'en';
+  t: typeof TEXT['vi'];
+  segmentRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+}) {
+  const category = getCategory(seg.startLocation.lat, seg.startLocation.lng);
+  const catConfig = CATEGORY_CONFIG[category];
+  const CatIcon = CATEGORY_ICONS[category];
+  const addr = getAddr(seg.startLocation.lat, seg.startLocation.lng);
+
+  return (
+    <div
+      ref={(el) => { segmentRefs.current[seg.startTime] = el; }}
+      onClick={() => onSegmentClick(seg)}
+      className={cn(
+        'flex cursor-pointer transition-all duration-200 group',
+        active ? 'bg-orange-500/5' : 'hover:bg-muted/20'
+      )}
+    >
+      {/* Timeline column */}
+      <div className="w-12 shrink-0 flex flex-col items-center py-3">
+        {!isFirst && <div className="w-0.5 h-1 bg-border/20" />}
+        <div className={cn(
+          "w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all shrink-0",
+          active
+            ? "border-orange-500 bg-orange-500/10 scale-105 shadow-sm shadow-orange-500/15"
+            : "border-border/25 bg-background group-hover:border-border/40"
+        )}>
+          <CatIcon className="w-4.5 h-4.5" style={{ color: catConfig.color }} />
+        </div>
+        {!isLast && <div className="w-0.5 flex-1 bg-border/20 mt-px" />}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 pr-4 py-3 min-w-0">
+        {/* Time range + duration */}
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-bold tabular-nums text-foreground">
+            {format(new Date(seg.startTime), 'HH:mm')}
+            <span className="text-muted-foreground/40 mx-1">—</span>
+            {format(new Date(seg.endTime), 'HH:mm')}
+          </span>
+          <div className={cn(
+            "flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold",
+            seg.durationMinutes >= 60
+              ? "bg-orange-500/10 text-orange-600 dark:text-orange-400"
+              : "bg-muted/50 text-muted-foreground"
+          )}>
+            <Clock className="w-2.5 h-2.5" />
+            {formatDuration(seg.durationMinutes)}
+          </div>
+        </div>
+
+        {/* Address */}
+        <p className={cn(
+          "text-[12px] font-medium leading-snug line-clamp-2",
+          active ? "text-foreground" : "text-foreground/80"
+        )}>
+          {getAddrFull(seg.startLocation.lat, seg.startLocation.lng)}
+        </p>
+
+        {/* Category + house number */}
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          {category !== 'other' && (
+            <div className="flex items-center gap-1">
+              <span className="text-xs">{catConfig.emoji}</span>
+              <span className="text-[10px] font-semibold" style={{ color: catConfig.color }}>
+                {catConfig.label[language]}
+              </span>
+            </div>
+          )}
+          {addr?.houseNumber && addr?.road && (
+            <div className="flex items-center gap-1 bg-blue-500/8 rounded px-1.5 py-0.5">
+              <Home className="w-2.5 h-2.5 text-blue-500" />
+              <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400">
+                {addr.houseNumber} {addr.road}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Playback Bar ──────────────────────────────────────────────────────────────
+
+function PlaybackBar({
+  trail, playbackIndex, isPlaying, playbackSpeed, currentSpeed, currentTimestamp,
+  isMinimized, onSeek, onTogglePlay, onNextSpeed, onMinimize, onRestore, loading, t,
+}: {
+  trail: Tables<'user_locations'>[];
+  playbackIndex: number;
+  isPlaying: boolean;
+  playbackSpeed: number;
+  currentSpeed: number;
+  currentTimestamp: string | null;
+  isMinimized: boolean;
+  onSeek: (index: number) => void;
+  onTogglePlay: () => void;
+  onNextSpeed: () => void;
+  onMinimize: () => void;
+  onRestore: () => void;
+  loading: boolean;
+  t: typeof TEXT['vi'];
+}) {
+  if (trail.length === 0 || loading) return null;
+
+  return (
+    <>
+      {/* Main bar */}
+      <div className={cn(
+        "absolute left-4 right-4 z-40 transition-all duration-500 ease-in-out",
+        isMinimized ? "bottom-[-100px] opacity-0 pointer-events-none" : "bottom-6 opacity-100"
+      )}>
+        <div className="bg-foreground/95 dark:bg-background/95 backdrop-blur-xl rounded-2xl p-3.5 shadow-[0_16px_48px_rgba(0,0,0,0.25)] border border-white/5 relative">
+          {/* Minimize button */}
+          <button
+            onClick={onMinimize}
+            className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-6 bg-foreground/95 dark:bg-background/95 border border-white/5 rounded-t-lg flex items-center justify-center cursor-pointer hover:bg-foreground dark:hover:bg-background transition-colors"
+          >
+            <ChevronDown className="w-3.5 h-3.5 text-background/70 dark:text-foreground/70" />
+          </button>
+
+          {/* Slider (LTR — natural left-to-right chronological) */}
+          <input
+            type="range"
+            min="0"
+            max={trail.length - 1}
+            value={playbackIndex === -1 ? 0 : playbackIndex}
+            onChange={(e) => onSeek(parseInt(e.target.value))}
+            className="w-full h-1 rounded-full appearance-none cursor-pointer mb-3 playback-slider"
+          />
+
+          {/* Controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-[12px] font-black tabular-nums text-background dark:text-foreground">
+                {currentTimestamp ? format(new Date(currentTimestamp), 'HH:mm:ss') : '--:--'}
+              </span>
+              <span className="text-[9px] font-semibold text-background/50 dark:text-foreground/50 tabular-nums">
+                {currentTimestamp ? format(new Date(currentTimestamp), 'dd/MM/yyyy') : ''}
+              </span>
+            </div>
+
+            {/* Calculated speed indicator */}
+            <div className="flex items-center gap-1 bg-background/15 dark:bg-white/10 rounded-lg px-2 py-1">
+              <Gauge className="w-3 h-3 text-background/60 dark:text-foreground/60" />
+              <span className="text-[10px] font-bold tabular-nums text-background/80 dark:text-foreground/80">
+                {Math.round(currentSpeed)} {t.speed}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={onTogglePlay}
+                className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90",
+                  isPlaying
+                    ? "bg-primary text-white shadow-lg shadow-primary/30"
+                    : "bg-background/20 dark:bg-white/10 text-background dark:text-foreground hover:bg-background/30 dark:hover:bg-white/15"
+                )}
+              >
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+              </button>
+              <button
+                onClick={onNextSpeed}
+                className="h-8 px-2.5 rounded-lg bg-background/15 dark:bg-white/10 text-[10px] font-black text-background dark:text-foreground transition-all active:scale-95 hover:bg-background/25 dark:hover:bg-white/15 tabular-nums"
+              >
+                {playbackSpeed}×
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating restore button */}
+      <button
+        onClick={onRestore}
+        className={cn(
+          "absolute right-4 bottom-6 w-12 h-12 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.2)] bg-foreground/95 dark:bg-background/95 backdrop-blur-xl border border-white/5 flex items-center justify-center text-background dark:text-foreground transition-all duration-300 z-50",
+          isMinimized ? "scale-100 opacity-100 translate-y-0" : "scale-50 opacity-0 translate-y-8 pointer-events-none"
+        )}
+      >
+        <PlayCircle className="w-6 h-6" />
+      </button>
+    </>
   );
 }

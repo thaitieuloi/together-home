@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { calcSpeedKmh } from '@/lib/tripUtils';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
@@ -535,26 +536,26 @@ export default function LeafletFamilyMap({
 
     const latlngs = historyTrail.map((loc) => [loc.latitude, loc.longitude] as [number, number]);
 
-    // Draw speed-colored segments
+    // Draw speed-colored segments (calculate speed from distance/time)
     for (let i = 0; i < historyTrail.length - 1; i++) {
       const curr = historyTrail[i];
       const next = historyTrail[i + 1];
-      const speedMs = (curr as { speed?: number | null }).speed ?? 0;
-      const kmh = speedMs * 3.6;
-      let segColor = '#6b7280';
-      if (speedMs > 0.5) {
-        if (kmh > 40) segColor = '#ef4444';
-        else if (kmh > 15) segColor = '#f97316';
-        else if (kmh > 5) segColor = '#eab308';
-        else segColor = '#3b82f6';
-      }
-      // Don't draw a direct line between points if there is a massive time gap (e.g. app was off)
+
+      // Don't draw line across large time gaps (app was off)
       const timeGapMs = Math.abs(new Date(curr.timestamp).getTime() - new Date(next.timestamp).getTime());
-      if (timeGapMs > 5 * 60 * 1000) continue;
+      if (timeGapMs > 10 * 60 * 1000) continue; // 10min gap = same as trip detection
+
+      // Calculate speed from distance/time between consecutive points
+      const dist = calcSpeedKmh(curr, next);
+      let segColor = '#3b82f6'; // blue = slow/walking
+      if (dist > 40) segColor = '#ef4444';       // red = fast driving
+      else if (dist > 15) segColor = '#f97316';   // orange = medium
+      else if (dist > 5) segColor = '#eab308';    // yellow = cycling
+      // else blue = walking/stationary
 
       L.polyline(
         [[curr.latitude, curr.longitude], [next.latitude, next.longitude]],
-        { color: segColor, weight: 4, opacity: 0.8 }
+        { color: segColor, weight: 4, opacity: 0.85 }
       ).addTo(historyLayerRef.current!);
     }
 
