@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { enUS, vi } from 'date-fns/locale';
-import { formatRelativeTime, getServerNow } from '@/lib/time';
+import { formatRelativeTime } from '@/lib/time';
+import { getStatusInfo, type UserStatus } from '@/lib/status';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
@@ -139,84 +140,7 @@ const LazyAvatarImage = ({ src, alt, className }: { src: string; alt: string; cl
   );
 };
 
-function getStatusInfo(
-  status: 'online' | 'idle' | 'offline' | 'logged_out',
-  locationTime: string | undefined,
-  profileTime: string | undefined,
-  language: 'vi' | 'en',
-  hasPushToken: boolean
-) {
-  const text = SIDEBAR_TEXT[language];
-  const now = getServerNow().getTime();
-  
-  const locMs = locationTime ? new Date(locationTime).getTime() : 0;
-  const profMs = profileTime ? new Date(profileTime).getTime() : 0;
-  const lastSeenMs = Math.max(locMs, profMs);
-  
-  const diffMs = lastSeenMs > 0 ? Math.max(0, now - lastSeenMs) : Infinity;
-  const diffMin = diffMs / 60000;
-  
-  const formatAccessTime = (min: number) => {
-    if (min <= 5) return text.justNow;
-    if (min < 60) return `${text.lastSeenPrefix} ${Math.round(min)} ${text.lastSeenSuffix}`;
-    if (min < 1440) return `${text.lastSeenPrefix} ${Math.round(min / 60)} giờ trước`;
-    return `${text.lastSeenPrefix} ${Math.round(min / 1440)} ngày trước`;
-  };
-
-  const isActuallyOnline = status === 'online' && diffMin < 1;
-  const isActuallyBackground = status === 'idle' && diffMin < 2;
-  const isActuallySignedOut = status === 'logged_out'; // Logout chủ động
-  const isActuallyClosed = status === 'offline' || (status === 'idle' && diffMin >= 2) || (status === 'online' && diffMin >= 1); // Swipe thoát hoặc timeout app
-
-  if (isActuallyOnline) {
-    return {
-      color: 'bg-emerald-500',
-      label: text.online,
-      ring: 'ring-emerald-500/20',
-      textClass: 'text-emerald-500',
-      isOffline: false,
-    };
-  }
-
-  if (isActuallyBackground) {
-    return {
-      color: 'bg-orange-500',
-      label: formatAccessTime(diffMin),
-      ring: 'ring-orange-500/20',
-      textClass: 'text-orange-500',
-      isOffline: false,
-    };
-  }
-
-  if (isActuallyClosed) {
-    return {
-      color: 'bg-purple-500',
-      label: formatAccessTime(diffMin),
-      ring: 'ring-purple-500/10',
-      textClass: 'text-purple-500',
-      isOffline: true,
-    };
-  }
-
-  if (isActuallySignedOut) {
-    return {
-      color: 'bg-slate-300',
-      label: text.offline,
-      ring: 'ring-slate-300/10',
-      textClass: 'text-slate-400',
-      isOffline: true,
-      isSignedOut: true,
-    };
-  }
-
-  return {
-    color: 'bg-slate-300',
-    label: text.disconnected,
-    ring: 'ring-slate-300/10',
-    textClass: 'text-slate-400',
-    isOffline: true,
-  };
-}
+// getStatusInfo is now imported from @/lib/status (shared between Sidebar + ActionSheet)
 
 function getBatteryInfo(level: number | null) {
   if (level === null || level === undefined) return null;
@@ -317,7 +241,7 @@ export default function FamilySidebar({
         <ScrollArea className="flex-1 w-full">
           <div className="flex flex-col items-center gap-4 py-2">
             {sortedMembers.map((m, i) => {
-              const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, m.profile.updated_at, language, !!m.profile.push_token);
+              const freshness = getStatusInfo(m.profile.status as UserStatus, m.profile.updated_at, language);
               const isSOS = activeSOSUserIds.has(m.user_id);
               return (
                 <button
@@ -397,7 +321,7 @@ export default function FamilySidebar({
           <ScrollArea className="flex-1">
             <div className="space-y-1 p-3 pb-8">
               {sortedMembers.map((m, i) => {
-                const freshness = getStatusInfo(m.profile.status, m.location?.timestamp, m.profile.updated_at, language, !!m.profile.push_token);
+                const freshness = getStatusInfo(m.profile.status as UserStatus, m.profile.updated_at, language);
                 const isUpdated = recentlyUpdated.has(m.user_id);
                 const isSOS = activeSOSUserIds.has(m.user_id);
                 const isLive = liveSharingUserIds.has(m.user_id);
@@ -479,9 +403,7 @@ export default function FamilySidebar({
                                 <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
                                   {(() => {
                                     const locTime = m.location?.timestamp ? new Date(m.location.timestamp).getTime() : 0;
-                                    const profileTime = m.profile.updated_at ? new Date(m.profile.updated_at).getTime() : 0;
-                                    const bestTime = Math.max(locTime, profileTime);
-                                    return bestTime > 0 ? formatRelativeTime(bestTime, language) : text.noLocation;
+                                    return locTime > 0 ? formatRelativeTime(locTime, language) : text.noLocation;
                                   })()}
                                 </span>
                               </div>

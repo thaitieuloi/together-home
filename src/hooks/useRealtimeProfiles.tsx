@@ -31,7 +31,7 @@ export function useRealtimeProfiles(
               user_id: string;
               display_name: string;
               avatar_url: string | null;
-              status: 'online' | 'idle' | 'offline';
+              status: 'online' | 'idle' | 'offline' | 'logged_out';
               updated_at: string;
             };
             

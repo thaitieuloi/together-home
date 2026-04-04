@@ -277,6 +277,8 @@ export default function LocationHistory({
   const [customTo, setCustomTo] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
   const [expandedSegments, setExpandedSegments] = useState<Set<string>>(new Set());
+  const [isPlaybackMinimized, setIsPlaybackMinimized] = useState(false);
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
 
   // Structured address cache
   const [addresses, setAddresses] = useState<Record<string, GeocodedAddress>>({});
@@ -361,8 +363,22 @@ export default function LocationHistory({
   };
 
   const handleSegmentClick = (seg: TripSegment) => {
-    const idx = trail.indexOf(seg.points[0]);
+    if (activeSegmentId === seg.startTime) {
+      // Unselect if clicked again
+      setActiveSegmentId(null);
+      onHistoryLoaded(trail, 'list');
+      return;
+    }
+
+    // Select this specific trip
+    setActiveSegmentId(seg.startTime);
+    // Move playback to the start of this trip (latest index in the reversed array)
+    const tripStartPoint = seg.points[seg.points.length - 1];
+    const idx = trail.indexOf(tripStartPoint);
     if (idx !== -1) handleSeek(idx);
+    
+    // Tell the map to only show lines for this segment
+    onHistoryLoaded(seg.points, 'map');
   };
 
   // ── Data loading ──────────────────────────────────────────────────────────
@@ -371,6 +387,7 @@ export default function LocationHistory({
     setLoading(true);
     stopPlayback();
     setPlaybackIndex(-1);
+    setActiveSegmentId(null);
 
     try {
       let since: string;
@@ -508,6 +525,7 @@ export default function LocationHistory({
       <SheetContent
         side="right"
         hideOverlay
+        hideCloseButton
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         className="p-0 w-full sm:max-w-[420px] border-l border-border/20 flex flex-col z-[1002] shadow-2xl overflow-hidden bg-background/98 backdrop-blur-2xl"
@@ -755,7 +773,7 @@ export default function LocationHistory({
                         {!isCollapsed && (
                           <div className="relative">
                             {group.segments.map((seg, i) => {
-                              const active = isSegmentActive(seg);
+                              const active = isSegmentActive(seg) || activeSegmentId === seg.startTime;
                               const isTrip = seg.type === 'trip';
                               const actType = isTrip ? getActivityType(seg.avgSpeed ?? 0) : null;
                               const actConfig = actType ? ACTIVITY_CONFIG[actType] : null;
@@ -1000,8 +1018,19 @@ export default function LocationHistory({
 
               {/* ── Playback Bar (Dynamic Island style) ────────────────────── */}
               {trail.length > 0 && !loading && (
-                <div className="absolute bottom-6 left-4 right-4 z-40 animate-in slide-in-from-bottom-4 duration-500">
-                  <div className="bg-foreground/95 dark:bg-background/95 backdrop-blur-xl rounded-2xl p-3.5 shadow-[0_16px_48px_rgba(0,0,0,0.25)] border border-white/5">
+                <div className={cn(
+                  "absolute left-4 right-4 z-40 transition-all duration-500 ease-in-out",
+                  isPlaybackMinimized ? "bottom-[-100px] opacity-0 pointer-events-none" : "bottom-6 opacity-100"
+                )}>
+                  <div className="bg-foreground/95 dark:bg-background/95 backdrop-blur-xl rounded-2xl p-3.5 shadow-[0_16px_48px_rgba(0,0,0,0.25)] border border-white/5 relative group">
+                    {/* Minimize toggle */}
+                    <button
+                      onClick={() => setIsPlaybackMinimized(true)}
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-6 bg-foreground/95 dark:bg-background/95 border border-white/5 rounded-t-lg flex items-center justify-center cursor-pointer hover:bg-foreground dark:hover:bg-background transition-colors"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5 text-background/70 dark:text-foreground/70" />
+                    </button>
+
                     {/* Slider */}
                     <input
                       type="range"
@@ -1062,6 +1091,19 @@ export default function LocationHistory({
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Floating Re-open Button when hidden */}
+              {trail.length > 0 && !loading && (
+                <button
+                  onClick={() => setIsPlaybackMinimized(false)}
+                  className={cn(
+                    "absolute right-4 bottom-6 w-12 h-12 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.2)] bg-foreground/95 dark:bg-background/95 backdrop-blur-xl border border-white/5 flex items-center justify-center text-background dark:text-foreground transition-all duration-300 z-50",
+                    isPlaybackMinimized ? "scale-100 opacity-100 translate-y-0" : "scale-50 opacity-0 translate-y-8 pointer-events-none"
+                  )}
+                >
+                  <PlayCircle className="w-6 h-6" />
+                </button>
               )}
             </>
           )}

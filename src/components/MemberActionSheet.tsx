@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { formatRelativeTime } from '@/lib/time';
+import { getStatusInfo, type UserStatus } from '@/lib/status';
 import { enUS, vi as viLocale } from 'date-fns/locale';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -167,29 +168,12 @@ export default function MemberActionSheet({
   const travelMode = loc ? getTravelMode(speedKmh, loc.is_moving, t) : null;
   const status = member.profile.status;
   const locMs = loc ? new Date(loc.timestamp).getTime() : 0;
-  const profMs = member.profile.updated_at ? new Date(member.profile.updated_at).getTime() : 0;
-  const lastSeenMs = Math.max(locMs, profMs);
-  const diffMin = lastSeenMs > 0 ? Math.max(0, (Date.now() - lastSeenMs) / 60000) : Infinity;
 
-  const isActuallyOnline = status === 'online' && diffMin < 1;
-  const isActuallyBackground = status === 'idle' && diffMin < 2;
-  const isActuallyClosed = (status === 'offline' || (status === 'idle' && diffMin >= 2) || (status === 'online' && diffMin >= 1)) && member.profile.push_token != null && diffMin < 10080;
-  const isActuallySignedOut = status === 'offline' && member.profile.push_token == null;
-
-  const formatAccessTime = (min: number) => {
-    if (min <= 5) return t.justNow;
-    if (min < 60) return `${t.lastSeenPrefix} ${Math.round(min)} ${t.lastSeenSuffix}`;
-    if (min < 1440) return `${t.lastSeenPrefix} ${Math.round(min / 60)} giờ trước`;
-    return `${t.lastSeenPrefix} ${Math.round(min / 1440)} ngày trước`;
-  };
-
-  const freshnessLabel = isActuallyOnline 
-    ? t.online 
-    : (isActuallyBackground || isActuallyClosed) 
-        ? formatAccessTime(diffMin)
-        : isActuallySignedOut ? t.offline : t.disconnected;
-  const freshnessColor = isActuallyOnline ? 'bg-emerald-500' : isActuallyBackground ? 'bg-orange-500' : isActuallyClosed ? 'bg-purple-500' : 'bg-slate-300';
-  const showBadge = !isActuallySignedOut;
+  // Use shared status utility — trusts DB status as source of truth
+  const statusInfo = getStatusInfo(status as UserStatus, member.profile.updated_at, language);
+  const freshnessLabel = statusInfo.label;
+  const freshnessColor = statusInfo.color;
+  const showBadge = !statusInfo.isSignedOut;
 
   const handleNavigateTo = (type: 'google' | 'apple') => {
     if (!loc) return;
@@ -263,7 +247,7 @@ export default function MemberActionSheet({
           </h3>
           <div className="flex flex-wrap gap-2 align-center">
             {showBadge && (
-              <Badge variant="outline" className={cn("text-xs uppercase font-bold px-2.5 h-6 rounded-md shadow-sm", isActuallyOnline ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5" : (isActuallyBackground ? "text-orange-500 border-orange-500/30" : "text-purple-500 border-purple-500/30"))}>
+            <Badge variant="outline" className={cn("text-xs uppercase font-bold px-2.5 h-6 rounded-md shadow-sm", status === 'online' ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5" : status === 'idle' ? "text-orange-500 border-orange-500/30 bg-orange-500/5" : "text-purple-500 border-purple-500/30 bg-purple-500/5")}>
                 {freshnessLabel}
               </Badge>
             )}
@@ -298,12 +282,12 @@ export default function MemberActionSheet({
             label={t.speed}
             active={speedKmh !== null && loc.is_moving}
           />
-          {!isActuallySignedOut && (
+          {!statusInfo.isSignedOut && (
             <StatusCard
               icon={<Clock className="w-5 h-5 text-orange-500" />}
-              value={formatRelativeTime(lastSeenMs, language)}
+              value={locMs > 0 ? formatRelativeTime(locMs, language) : t.noLocation}
               label={t.lastSeen}
-              active={true}
+              active={locMs > 0}
             />
           )}
         </div>
