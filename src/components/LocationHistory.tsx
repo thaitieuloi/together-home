@@ -418,7 +418,7 @@ export default function LocationHistory({
       const { data, error } = await query;
       if (error) throw error;
 
-      const result = data ?? [];
+      const result = (data ?? []).filter(loc => loc.accuracy === null || loc.accuracy <= 300);
       setTrail(result);
       onHistoryLoaded(result, 'list');
       if (result.length > 0) setPlaybackIndex(result.length - 1);

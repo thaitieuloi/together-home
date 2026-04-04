@@ -548,19 +548,14 @@ export default function LeafletFamilyMap({
         else if (kmh > 5) segColor = '#eab308';
         else segColor = '#3b82f6';
       }
+      // Don't draw a direct line between points if there is a massive time gap (e.g. app was off)
+      const timeGapMs = Math.abs(new Date(curr.timestamp).getTime() - new Date(next.timestamp).getTime());
+      if (timeGapMs > 5 * 60 * 1000) continue;
+
       L.polyline(
         [[curr.latitude, curr.longitude], [next.latitude, next.longitude]],
         { color: segColor, weight: 4, opacity: 0.8 }
       ).addTo(historyLayerRef.current!);
-
-      // Add a small dot for each point to make it more interactive/visible
-      L.circleMarker([curr.latitude, curr.longitude], {
-        radius: 3,
-        color: segColor,
-        fillColor: 'white',
-        fillOpacity: 1,
-        weight: 1,
-      }).addTo(historyLayerRef.current!);
     }
 
     const polyline = L.polyline(latlngs, { color: 'transparent', weight: 0, opacity: 0 });
