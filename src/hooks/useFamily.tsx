@@ -11,6 +11,7 @@ export interface FamilyMemberWithProfile {
     display_name: string;
     avatar_url: string | null;
     status: 'online' | 'idle' | 'offline' | 'logged_out';
+    status_updated_at: string | null;
     updated_at: string;
     push_token: string | null;
   };
@@ -108,6 +109,7 @@ export function useFamily() {
         display_name: profile?.display_name || legacyUser?.name || 'Unknown User',
         avatar_url: profile?.avatar_url || legacyUser?.photo_url || null,
         status: (profile as any)?.status || 'offline',
+        status_updated_at: (profile as any)?.status_updated_at || null,
         created_at: profile?.created_at || legacyUser?.created_at || new Date().toISOString(),
         updated_at: profile?.updated_at || legacyUser?.updated_at || new Date().toISOString(),
         push_token: profile?.push_token || null,

@@ -63,6 +63,7 @@ const SIDEBAR_TEXT = {
     removed: 'Đã xóa',
     members: 'Thành viên gia đình',
     noLocation: 'Chưa có vị trí',
+    unknownStatus: 'Chưa xác định',
     viewTrip: 'Xem lịch sử',
     removeMember: 'Xóa thành viên',
     lightMode: 'Sáng',
@@ -90,6 +91,7 @@ const SIDEBAR_TEXT = {
     removed: 'Removed',
     members: 'Family Members',
     noLocation: 'No location yet',
+    unknownStatus: 'Unknown',
     viewTrip: 'Movement history',
     removeMember: 'Remove member',
     lightMode: 'Light',
@@ -241,7 +243,7 @@ export default function FamilySidebar({
         <ScrollArea className="flex-1 w-full">
           <div className="flex flex-col items-center gap-4 py-2">
             {sortedMembers.map((m, i) => {
-              const freshness = getStatusInfo(m.profile.status as UserStatus, m.profile.updated_at, language);
+              const freshness = getStatusInfo(m.profile.status as UserStatus, m.profile.status_updated_at, language);
               const isSOS = activeSOSUserIds.has(m.user_id);
               return (
                 <button
@@ -321,7 +323,7 @@ export default function FamilySidebar({
           <ScrollArea className="flex-1">
             <div className="space-y-1 p-3 pb-8">
               {sortedMembers.map((m, i) => {
-                const freshness = getStatusInfo(m.profile.status as UserStatus, m.profile.updated_at, language);
+                const freshness = getStatusInfo(m.profile.status as UserStatus, m.profile.status_updated_at, language);
                 const isUpdated = recentlyUpdated.has(m.user_id);
                 const isSOS = activeSOSUserIds.has(m.user_id);
                 const isLive = liveSharingUserIds.has(m.user_id);
@@ -386,8 +388,8 @@ export default function FamilySidebar({
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={cn('text-[11px] font-bold uppercase tracking-wider shrink-0', freshness?.textClass)}>
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <span className={cn('text-[11px] font-bold uppercase tracking-wider', freshness?.textClass)}>
                             {isLive ? (
                               <span className="flex items-center gap-1 text-primary">
                                 <Radio className="w-3.5 h-3.5 animate-pulse" /> LIVE
@@ -396,18 +398,15 @@ export default function FamilySidebar({
                           </span>
 
                           {!freshness?.isSignedOut && (
-                            <>
-                              <span className="text-muted-foreground/30">•</span>
-                              <div className="flex items-center gap-1.5 overflow-hidden">
-                                <Clock className="w-3 h-3 shrink-0 opacity-40 text-muted-foreground" />
-                                <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
-                                  {(() => {
-                                    const locTime = m.location?.timestamp ? new Date(m.location.timestamp).getTime() : 0;
-                                    return locTime > 0 ? formatRelativeTime(locTime, language) : text.noLocation;
-                                  })()}
-                                </span>
-                              </div>
-                            </>
+                            <div className="flex items-center gap-1.5 overflow-hidden">
+                              <Clock className="w-3.5 h-3.5 shrink-0 opacity-50 text-muted-foreground" />
+                              <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
+                                {(() => {
+                                  const statusTime = m.profile.status_updated_at ? new Date(m.profile.status_updated_at).getTime() : 0;
+                                  return statusTime > 0 ? formatRelativeTime(statusTime, language) : text.unknownStatus;
+                                })()}
+                              </span>
+                            </div>
                           )}
                         </div>
 

@@ -32,6 +32,7 @@ export function useRealtimeProfiles(
               display_name: string;
               avatar_url: string | null;
               status: 'online' | 'idle' | 'offline' | 'logged_out';
+              status_updated_at: string | null;
               updated_at: string;
             };
             
@@ -42,6 +43,7 @@ export function useRealtimeProfiles(
                 display_name: record.display_name,
                 avatar_url: record.avatar_url,
                 status: record.status,
+                status_updated_at: record.status_updated_at,
                 updated_at: record.updated_at,
               });
             }

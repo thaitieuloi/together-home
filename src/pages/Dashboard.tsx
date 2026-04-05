@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { App } from '@capacitor/app';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
@@ -31,7 +31,6 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SOSButton from '@/components/SOSButton';
 import { useSOSAlerts } from '@/hooks/useSOSAlerts';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useLiveLocationSharing } from '@/hooks/useLiveLocationSharing';
 import NotificationPanel from '@/components/NotificationPanel';
 import DebugTrackingPanel from '@/components/DebugTrackingPanel';
 import { Badge } from '@/components/ui/badge';
@@ -253,17 +252,19 @@ export default function Dashboard() {
   }, [location.pathname]);
 
   // Status tracking (Online/Idle/Offline)
+  const currentStatusRef = useRef<'online' | 'idle' | 'offline' | null>(null);
+
   useEffect(() => {
     if (!user) return;
+    currentStatusRef.current = null; // reset on user change
 
     const updateStatus = async (status: 'online' | 'idle' | 'offline') => {
+      if (currentStatusRef.current === status) return;
+      currentStatusRef.current = status;
       try {
         await supabase
           .from('profiles')
-          .update({ 
-            status,
-            updated_at: new Date().toISOString()
-          } as any)
+          .update({ status } as any)
           .eq('user_id', user.id);
       } catch (err) {
         console.error('Failed to update status:', err);
@@ -293,7 +294,7 @@ export default function Dashboard() {
         if (isActive) {
           updateStatus('online');
         } else {
-          updateStatus('offline'); // Changed to offline for consistency
+          updateStatus('idle');
         }
       });
     }

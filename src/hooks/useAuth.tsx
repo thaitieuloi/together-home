@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await supabase
           .from('profiles')
-          .update({ status: 'offline' } as any)
+          .update({ status: 'logged_out' } as any)
           .eq('user_id', user.id);
       } catch (err) {
         console.error('Logout status update failed:', err);

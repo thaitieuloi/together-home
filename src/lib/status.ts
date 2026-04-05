@@ -14,11 +14,15 @@ export interface StatusInfo {
 const STATUS_TEXT = {
   vi: {
     online: 'Đang online',
+    idle: 'Vừa mới truy cập',
+    offline: 'Ngoại tuyến',
     loggedOut: 'Thoát hệ thống',
     disconnected: 'Ngoại tuyến',
   },
   en: {
     online: 'Online',
+    idle: 'Just now',
+    offline: 'Offline',
     loggedOut: 'Signed out',
     disconnected: 'Disconnected',
   },
@@ -26,22 +30,15 @@ const STATUS_TEXT = {
 
 /**
  * Unified status info for both FamilySidebar and MemberActionSheet.
- * 
+ *
  * Status is determined purely from DB `profiles.status` (source of truth).
- * Time display for idle/offline uses `profiles.updated_at` which now only
- * changes on actual status transitions (not on every background location update).
  */
 export function getStatusInfo(
   status: UserStatus,
-  profileUpdatedAt: string | undefined,
+  statusUpdatedAt: string | null | undefined,
   language: 'vi' | 'en'
 ): StatusInfo {
   const t = STATUS_TEXT[language];
-
-  // For idle/offline, show time since status changed
-  const statusTimeLabel = profileUpdatedAt
-    ? formatRelativeTime(new Date(profileUpdatedAt).getTime(), language)
-    : '';
 
   switch (status) {
     case 'online':
@@ -55,7 +52,7 @@ export function getStatusInfo(
     case 'idle':
       return {
         color: 'bg-orange-500',
-        label: statusTimeLabel,
+        label: t.idle,
         ring: 'ring-orange-500/20',
         textClass: 'text-orange-500',
         isOffline: false,
@@ -63,7 +60,7 @@ export function getStatusInfo(
     case 'offline':
       return {
         color: 'bg-purple-500',
-        label: t.disconnected,
+        label: t.offline,
         ring: 'ring-purple-500/10',
         textClass: 'text-purple-500',
         isOffline: true,

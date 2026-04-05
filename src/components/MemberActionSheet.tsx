@@ -61,6 +61,7 @@ const TEXT = {
     speed: 'Tốc độ',
     lastSeen: 'Cập nhật',
     noLocation: 'Chưa có vị trí',
+    unknownStatus: 'Chưa xác định',
     offline: 'Đã đăng xuất',
     online: 'Trực tuyến',
     recent: 'Chạy ngầm',
@@ -90,6 +91,7 @@ const TEXT = {
     speed: 'Speed',
     lastSeen: 'Updated',
     noLocation: 'No location',
+    unknownStatus: 'Unknown',
     offline: 'Signed out',
     online: 'Online',
     recent: 'Background',
@@ -170,7 +172,7 @@ export default function MemberActionSheet({
   const locMs = loc ? new Date(loc.timestamp).getTime() : 0;
 
   // Use shared status utility — trusts DB status as source of truth
-  const statusInfo = getStatusInfo(status as UserStatus, member.profile.updated_at, language);
+  const statusInfo = getStatusInfo(status as UserStatus, member.profile.status_updated_at, language);
   const freshnessLabel = statusInfo.label;
   const freshnessColor = statusInfo.color;
   const showBadge = !statusInfo.isSignedOut;
@@ -285,9 +287,12 @@ export default function MemberActionSheet({
           {!statusInfo.isSignedOut && (
             <StatusCard
               icon={<Clock className="w-5 h-5 text-orange-500" />}
-              value={locMs > 0 ? formatRelativeTime(locMs, language) : t.noLocation}
+              value={(() => {
+                const statusTime = member.profile.status_updated_at ? new Date(member.profile.status_updated_at).getTime() : 0;
+                return statusTime > 0 ? formatRelativeTime(statusTime, language) : t.unknownStatus;
+              })()}
               label={t.lastSeen}
-              active={locMs > 0}
+              active={!!member.profile.status_updated_at}
             />
           )}
         </div>
