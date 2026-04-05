@@ -334,6 +334,7 @@ export type Database = {
           id: string
           push_token: string | null
           status: string | null
+          status_updated_at: string | null
           updated_at: string
           user_id: string
         }
@@ -344,6 +345,7 @@ export type Database = {
           id?: string
           push_token?: string | null
           status?: string | null
+          status_updated_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -354,6 +356,7 @@ export type Database = {
           id?: string
           push_token?: string | null
           status?: string | null
+          status_updated_at?: string | null
           updated_at?: string
           user_id?: string
         }
