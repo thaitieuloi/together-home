@@ -26,13 +26,16 @@ import { getServerNow } from '@/lib/time';
 import { detectTrips, TripSegment, getActivityType, calcSpeedKmh } from '@/lib/tripUtils';
 import {
   batchReverseGeocodeStructured,
+  reverseGeocode,
   getCacheKey,
   GeocodedAddress,
   CATEGORY_CONFIG,
   PlaceCategory
 } from '@/lib/geocoding';
 import { useToast } from '@/hooks/use-toast';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
+import { getStatusInfo, type UserStatus } from '@/lib/status';
 
 interface Props {
   members: FamilyMemberWithProfile[];
@@ -253,6 +256,7 @@ export default function LocationHistory({
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const [isPlaybackMinimized, setIsPlaybackMinimized] = useState(false);
+  const [viewMode, setViewMode] = useState<'timeline' | 'weekly'>('timeline');
 
   const [addresses, setAddresses] = useState<Record<string, GeocodedAddress>>({});
   const segmentRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -295,6 +299,18 @@ export default function LocationHistory({
       });
     }
   }, [playbackIndex, sortedTrail, trips]);
+
+  // ── Geocode Playback Point ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (playbackIndex === -1 || !sortedTrail[playbackIndex]) return;
+    const p = sortedTrail[playbackIndex];
+    const key = getCacheKey(p.latitude, p.longitude);
+    if (!addresses[key]) {
+      void reverseGeocode(p.latitude, p.longitude).then(addr => {
+        setAddresses(prev => ({ ...prev, [key]: addr }));
+      });
+    }
+  }, [playbackIndex, sortedTrail]);
 
   // ── Playback (now uses chronological order, slider goes left→right) ─────────
   const stopPlayback = useCallback(() => {
@@ -477,6 +493,46 @@ export default function LocationHistory({
     return { dist, moving, tripC, stayC, maxSpd };
   }, [dayGroups, trips]);
 
+  // ── Weekly stats (derived from trail — mirrors mobile _calculateWeeklyStats) ─
+  const weeklyStats = useMemo(() => {
+    const dailyDist: number[] = new Array(7).fill(0);
+    const dailyMaxSpeed: number[] = new Array(7).fill(0);
+    const dailyEvents: number[] = new Array(7).fill(0); // high-speed events
+    let totalDist = 0;
+
+    const chron = [...trail].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    for (let i = 0; i < chron.length - 1; i++) {
+      const p1 = chron[i];
+      const p2 = chron[i + 1];
+      const dayIdx = new Date(p1.timestamp).getDay(); // 0=Sun..6=Sat
+
+      // Haversine distance in km
+      const R = 6371;
+      const dLat = ((p2.latitude - p1.latitude) * Math.PI) / 180;
+      const dLon = ((p2.longitude - p1.longitude) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((p1.latitude * Math.PI) / 180) *
+          Math.cos((p2.latitude * Math.PI) / 180) *
+          Math.sin(dLon / 2) ** 2;
+      const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+      const timeSec = (new Date(p2.timestamp).getTime() - new Date(p1.timestamp).getTime()) / 1000;
+      if (dist > 0.01 && timeSec > 0) {
+        dailyDist[dayIdx] += dist;
+        const spd = (dist / timeSec) * 3600; // km/h
+        if (spd > 5 && spd < 160) {
+          if (spd > dailyMaxSpeed[dayIdx]) dailyMaxSpeed[dayIdx] = spd;
+          if (spd > 80) dailyEvents[dayIdx]++;
+        }
+      }
+    }
+    totalDist = dailyDist.reduce((s, v) => s + v, 0);
+    const maxSpeed = Math.max(...dailyMaxSpeed);
+    const avgDist = totalDist / 7;
+    return { dailyDist, dailyMaxSpeed, dailyEvents, totalDist, maxSpeed, avgDist };
+  }, [trail]);
+
   // ═════════════════════════════════════════════════════════════════════════════
   // RENDER
   // ═════════════════════════════════════════════════════════════════════════════
@@ -490,6 +546,9 @@ export default function LocationHistory({
         onInteractOutside={(e) => e.preventDefault()}
         className="p-0 w-full sm:max-w-[420px] border-l border-border/20 flex flex-col z-[1002] shadow-2xl overflow-hidden bg-background/98 backdrop-blur-2xl"
       >
+        <VisuallyHidden.Root>
+          <SheetTitle>{t.title}</SheetTitle>
+        </VisuallyHidden.Root>
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="shrink-0">
           <div className="flex items-center justify-between px-5 pt-5 pb-2">
@@ -522,19 +581,25 @@ export default function LocationHistory({
                 <SelectValue placeholder={t.pickMember} />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-border/30 z-[1003]">
-                {members.map((m) => (
-                  <SelectItem key={m.user_id} value={m.user_id} className="rounded-lg py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className={cn(
-                        "w-2.5 h-2.5 rounded-full ring-2 ring-offset-1 ring-offset-background",
-                        m.profile.status === 'online' ? 'bg-emerald-500 ring-emerald-500/30' :
-                        m.profile.status === 'idle' ? 'bg-orange-500 ring-orange-500/30' :
-                        'bg-slate-400 ring-slate-400/30'
-                      )} />
-                      <span className="font-semibold">{m.profile.display_name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {members.map((m) => {
+                  const statusInfo = getStatusInfo(m.profile.status as UserStatus, m.profile.status_updated_at, language);
+                  return (
+                    <SelectItem key={m.user_id} value={m.user_id} className="rounded-lg py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn(
+                          "w-2.5 h-2.5 rounded-full ring-2 ring-offset-1 ring-offset-background",
+                          statusInfo.color,
+                          // Thêm hiệu ứng ring cho màu tương ứng
+                          statusInfo.color.includes('emerald') ? 'ring-emerald-500/30' :
+                          statusInfo.color.includes('orange') ? 'ring-orange-500/30' :
+                          statusInfo.color.includes('purple') ? 'ring-purple-500/30' :
+                          'ring-slate-400/30'
+                        )} />
+                        <span className="font-semibold">{m.profile.display_name}</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -599,6 +664,31 @@ export default function LocationHistory({
             </div>
           )}
 
+          {/* ── View Mode tabs ───────────────────────────────── */}
+          <div className="px-5 pb-3">
+            <div className="flex p-1 bg-muted/40 rounded-xl gap-1">
+              {(['timeline', 'weekly'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    setViewMode(mode);
+                    if (mode === 'weekly' && selectedRange !== '7d') {
+                      setSelectedRange('7d');
+                    }
+                  }}
+                  className={cn(
+                    'flex-1 h-8 text-xs font-bold rounded-lg transition-all duration-200',
+                    viewMode === mode
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {mode === 'timeline' ? (language === 'vi' ? '📍 Dòng thời gian' : '📍 Timeline') : (language === 'vi' ? '📊 Hằng tuần' : '📊 Weekly')}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="h-px bg-gradient-to-r from-transparent via-border/40 to-transparent" />
         </div>
 
@@ -623,6 +713,8 @@ export default function LocationHistory({
               <p className="text-xs text-muted-foreground max-w-[220px] leading-relaxed">{t.noDataDesc}</p>
               <p className="text-[10px] text-primary/60 mt-4 font-semibold">{t.suggestRange}</p>
             </div>
+          ) : viewMode === 'weekly' ? (
+            <WeeklyReport stats={weeklyStats} language={language} />
           ) : (
             <>
               {/* ── Summary Cards (iSharing style) ──────────────────────── */}
@@ -660,6 +752,7 @@ export default function LocationHistory({
                 playbackSpeed={playbackSpeed}
                 currentSpeed={currentSpeed}
                 currentTimestamp={currentTimestamp}
+                getAddrFull={getAddrFull}
                 isMinimized={isPlaybackMinimized}
                 onSeek={handleSeek}
                 onTogglePlay={togglePlayback}
@@ -809,6 +902,7 @@ function DaySection({
                 isLast={isLast}
                 onSegmentClick={onSegmentClick}
                 getAddrShort={getAddrShort}
+                getAddrFull={getAddrFull}
                 language={language}
                 t={t}
                 segmentRefs={segmentRefs}
@@ -839,13 +933,14 @@ function DaySection({
 // ── Trip Card (iSharing style: compact connector between stays) ───────────────
 
 function TripCard({
-  seg, active, isLast, onSegmentClick, getAddrShort, language, t, segmentRefs,
+  seg, active, isLast, onSegmentClick, getAddrShort, getAddrFull, language, t, segmentRefs,
 }: {
   seg: TripSegment;
   active: boolean;
   isLast: boolean;
   onSegmentClick: (seg: TripSegment) => void;
   getAddrShort: (lat: number, lng: number) => string;
+  getAddrFull: (lat: number, lng: number) => string;
   language: 'vi' | 'en';
   t: typeof TEXT['vi'];
   segmentRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
@@ -903,18 +998,24 @@ function TripCard({
           </div>
 
           {/* Route: From → To */}
-          <div className="relative pl-3.5 space-y-0.5 mb-2">
+          <div className="relative pl-3.5 space-y-1.5 mb-2">
             <div className="absolute left-[3px] top-[5px] bottom-[5px] w-0.5 bg-gradient-to-b from-emerald-500/60 to-red-500/60 rounded-full" />
-            <div className="flex items-center gap-1.5 relative">
-              <div className="absolute -left-3.5 top-[4px] w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <p className="text-[11px] text-foreground/70 leading-snug line-clamp-1">
+            <div className="flex flex-col relative">
+              <div className="absolute -left-3.5 top-[5px] w-2 h-2 rounded-full border-2 border-white bg-emerald-500 shadow-sm" />
+              <p className="text-[11px] font-bold text-foreground/90 leading-tight">
                 {getAddrShort(seg.startLocation.lat, seg.startLocation.lng)}
               </p>
+              <p className="text-[9px] text-muted-foreground truncate" title={getAddrFull(seg.startLocation.lat, seg.startLocation.lng).split(',').slice(1).join(',').trim()}>
+                {getAddrFull(seg.startLocation.lat, seg.startLocation.lng).split(',').slice(1).join(',').trim()}
+              </p>
             </div>
-            <div className="flex items-center gap-1.5 relative">
-              <div className="absolute -left-3.5 top-[4px] w-1.5 h-1.5 rounded-full bg-red-500" />
-              <p className="text-[11px] text-foreground/70 leading-snug line-clamp-1">
+            <div className="flex flex-col relative">
+              <div className="absolute -left-3.5 top-[5px] w-2 h-2 rounded-full border-2 border-white bg-red-500 shadow-sm" />
+              <p className="text-[11px] font-bold text-foreground/90 leading-tight">
                 {getAddrShort(seg.endLocation.lat, seg.endLocation.lng)}
+              </p>
+              <p className="text-[9px] text-muted-foreground truncate" title={getAddrFull(seg.endLocation.lat, seg.endLocation.lng).split(',').slice(1).join(',').trim()}>
+                {getAddrFull(seg.endLocation.lat, seg.endLocation.lng).split(',').slice(1).join(',').trim()}
               </p>
             </div>
           </div>
@@ -1043,7 +1144,7 @@ function StayCard({
 // ── Playback Bar ──────────────────────────────────────────────────────────────
 
 function PlaybackBar({
-  trail, playbackIndex, isPlaying, playbackSpeed, currentSpeed, currentTimestamp,
+  trail, playbackIndex, isPlaying, playbackSpeed, currentSpeed, currentTimestamp, getAddrFull,
   isMinimized, onSeek, onTogglePlay, onNextSpeed, onMinimize, onRestore, loading, t,
 }: {
   trail: Tables<'user_locations'>[];
@@ -1052,6 +1153,7 @@ function PlaybackBar({
   playbackSpeed: number;
   currentSpeed: number;
   currentTimestamp: string | null;
+  getAddrFull: (lat: number, lng: number) => string;
   isMinimized: boolean;
   onSeek: (index: number) => void;
   onTogglePlay: () => void;
@@ -1101,11 +1203,17 @@ function PlaybackBar({
             </div>
 
             {/* Calculated speed indicator */}
-            <div className="flex items-center gap-1 bg-background/15 dark:bg-white/10 rounded-lg px-2 py-1">
-              <Gauge className="w-3 h-3 text-background/60 dark:text-foreground/60" />
-              <span className="text-[10px] font-bold tabular-nums text-background/80 dark:text-foreground/80">
-                {Math.round(currentSpeed)} {t.speed}
-              </span>
+            <div className="flex-1 flex flex-col justify-center px-4 overflow-hidden">
+               <p className="text-[10px] font-bold text-background dark:text-foreground line-clamp-1 text-center">
+                  {playbackIndex !== -1 && trail[playbackIndex] ? getAddrFull(trail[playbackIndex].latitude, trail[playbackIndex].longitude) : '...'}
+               </p>
+            </div>
+
+            <div className="flex items-center gap-1 bg-background/15 dark:bg-white/10 rounded-lg px-2 py-1 shrink-0">
+               <Gauge className="w-3 h-3 text-background/60 dark:text-foreground/60" />
+               <span className="text-[10px] font-bold tabular-nums text-background/80 dark:text-foreground/80">
+                 {Math.round(currentSpeed)} {t.speed}
+               </span>
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -1142,5 +1250,90 @@ function PlaybackBar({
         <PlayCircle className="w-6 h-6" />
       </button>
     </>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// WEEKLY REPORT SUB-COMPONENT
+// ═════════════════════════════════════════════════════════════════════════════
+function WeeklyReport({ stats, language }: { 
+  stats: { dailyDist: number[], dailyMaxSpeed: number[], dailyEvents: number[], totalDist: number, maxSpeed: number, avgDist: number },
+  language: 'vi' | 'en' 
+}) {
+  const daysVi = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  const daysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const days = language === 'vi' ? daysVi : daysEn;
+
+  return (
+    <div className="flex-1 overflow-y-auto p-5 pb-20 space-y-6">
+      {/* Event Distribution Chart */}
+      <div className="bg-card rounded-2xl p-5 border border-border/50 shadow-sm">
+        <h3 className="text-sm font-bold mb-4">{language === 'vi' ? 'Sự cố & Thay đổi tốc độ' : 'Events & Speed Changes'}</h3>
+        <div className="flex items-end justify-between h-40 gap-2">
+          {stats.dailyEvents.map((val, i) => {
+            const h = stats.dailyEvents.reduce((m,v)=>Math.max(m,v),0) > 0 ? (val / Math.max(...stats.dailyEvents)) * 100 : 0;
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                <div className="w-full text-center text-[10px] font-semibold text-muted-foreground">{val > 0 ? val : ''}</div>
+                <div className="w-full bg-orange-100 dark:bg-orange-900/30 rounded-t-sm flex items-end justify-center h-full relative group">
+                  <div className="w-full bg-orange-500 rounded-t-sm transition-all duration-500" style={{ height: `${h}%` }} />
+                </div>
+                <span className="text-[10px] font-bold text-muted-foreground">{days[i]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Max Speed Chart */}
+      <div className="bg-card rounded-2xl p-5 border border-border/50 shadow-sm">
+        <h3 className="text-sm font-bold mb-4">{language === 'vi' ? 'Tốc độ tối đa' : 'Max Speed'}</h3>
+        <div className="flex items-end justify-between h-40 gap-2">
+          {stats.dailyMaxSpeed.map((val, i) => {
+            const h = stats.maxSpeed > 0 ? (val / stats.maxSpeed) * 100 : 0;
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                <div className="w-full text-center text-[10px] font-semibold text-muted-foreground">{val > 0 ? Math.round(val) : ''}</div>
+                <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t-sm flex items-end justify-center h-full relative group">
+                  <div className="w-full bg-blue-500 rounded-t-sm transition-all duration-500" style={{ height: `${h}%` }} />
+                </div>
+                <span className="text-[10px] font-bold text-muted-foreground">{days[i]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Avg Distance Chart */}
+      <div className="bg-card rounded-2xl p-5 border border-border/50 shadow-sm">
+        <h3 className="text-sm font-bold mb-4">{language === 'vi' ? 'Quãng đường (km)' : 'Distance (km)'}</h3>
+        <div className="flex items-end justify-between h-40 gap-2">
+          {stats.dailyDist.map((val, i) => {
+            const maxD = Math.max(...stats.dailyDist);
+            const h = maxD > 0 ? (val / maxD) * 100 : 0;
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                <div className="w-full text-center text-[10px] font-semibold text-muted-foreground">{val > 0 ? Math.round(val) : ''}</div>
+                <div className="w-full bg-indigo-100 dark:bg-indigo-900/30 rounded-t-sm flex items-end justify-center h-full relative group">
+                  <div className="w-full bg-indigo-500 rounded-t-sm transition-all duration-500" style={{ height: `${h}%` }} />
+                </div>
+                <span className="text-[10px] font-bold text-muted-foreground">{days[i]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+{/* Overroll stats */}
+<div className="grid grid-cols-2 gap-4">
+  <div className="bg-card rounded-2xl p-4 border border-border/50 flex flex-col items-center">
+  <div className="text-xs text-muted-foreground mb-1">{language === 'vi' ? 'Tổng quãng đường' : 'Total Distance'}</div>
+  <div className="text-xl font-bold text-foreground">{stats.totalDist.toFixed(1)} <span className="text-xs font-normal">km</span></div>
+  </div>
+  <div className="bg-card rounded-2xl p-4 border border-border/50 flex flex-col items-center">
+  <div className="text-xs text-muted-foreground mb-1">{language === 'vi' ? 'TB mỗi ngày' : 'Daily Avg'}</div>
+  <div className="text-xl font-bold text-foreground">{stats.avgDist.toFixed(1)} <span className="text-xs font-normal">km</span></div>
+  </div>
+</div>
+    </div>
   );
 }

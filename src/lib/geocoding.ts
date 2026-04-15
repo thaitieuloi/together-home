@@ -45,21 +45,26 @@ const CATEGORY_KEYWORDS: Record<PlaceCategory, string[]> = {
   other: [],
 };
 
-function detectCategory(data: any): PlaceCategory {
-  const addr = data.address ?? {};
-  const tags = data.extratags ?? {};
-  const type = data.type ?? '';
-  const category = data.category ?? '';
+function detectCategory(googleTypes: string[]): PlaceCategory {
+  const typeMap: Record<string, PlaceCategory[]> = {
+    'home': ['sublocality', 'neighborhood', 'residential'],
+    'work': ['office', 'industrial', 'commercial'],
+    'school': ['school', 'university', 'college', 'kindergarten'],
+    'hospital': ['hospital', 'pharmacy', 'doctor', 'health'],
+    'restaurant': ['restaurant', 'food', 'meal_takeaway'],
+    'cafe': ['cafe', 'bakery'],
+    'shop': ['store', 'shopping_mall', 'supermarket', 'clothing_store'],
+    'park': ['park', 'garden', 'amusement_park'],
+    'gym': ['gym', 'stadium'],
+    'gas_station': ['gas_station'],
+    'parking': ['parking'],
+    'worship': ['church', 'hindu_temple', 'mosque', 'synagogue'],
+    'hotel': ['lodging'],
+    'entertainment': ['movie_theater', 'casino', 'night_club'],
+  };
 
-  // Combine all searchable text
-  const searchText = [
-    type, category, addr.amenity, addr.shop, addr.office, addr.tourism,
-    addr.leisure, addr.building, addr.landuse, data.name, tags.building,
-  ].filter(Boolean).join(' ').toLowerCase();
-
-  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    if (cat === 'other') continue;
-    if (keywords.some(kw => searchText.includes(kw))) {
+  for (const [cat, gTypes] of Object.entries(typeMap)) {
+    if (googleTypes.some(gt => gTypes.includes(gt))) {
       return cat as PlaceCategory;
     }
   }
@@ -144,50 +149,76 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Geocoded
 
   const promise = (async (): Promise<GeocodedAddress> => {
     try {
-      // zoom=19 for house-level detail, addressdetails=1 for structured data
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) throw new Error('Missing Google Maps API Key');
+
+      // Google Maps Geocoding API
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi&addressdetails=1&extratags=1&namedetails=1&zoom=19`,
-        {
-          headers: { 'User-Agent': 'FamilyTracker/2.0 (family-tracker-app)' },
-          signal: AbortSignal.timeout(6000),
-        }
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&language=vi`,
+        { signal: AbortSignal.timeout(6000) }
       );
+      
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const addr = data.address ?? {};
-      const extratags = data.extratags ?? {};
-      const namedetails = data.namedetails ?? {};
+      
+      if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+        throw new Error('No results from Google Maps API');
+      }
 
-      // ── Build structured address parts ──
+      // Prefer the result that has street_number; fall back to results[0]
+      const resultWithNumber = data.results.find((r: { address_components: { types: string[]; long_name: string }[] }) =>
+        r.address_components.some((c: { types: string[] }) => c.types.includes('street_number'))
+      ) ?? data.results[0];
+      const resultObj = resultWithNumber;
+      const allComponents = data.results.flatMap((r: { address_components: { types: string[]; long_name: string }[] }) => r.address_components);
+      const components = resultObj.address_components;
 
-      // 1. House number from multiple sources
-      const houseNumber =
-        addr.house_number
-        || extratags['addr:housenumber']
-        || namedetails['addr:housenumber']
-        || addr.building
-        || null;
+      let houseNumber = null;
+      let road = null;
+      let area = null; // ward / sublocality
+      let district = null; // locality or administrative_area_level_2
+      let city = null; // administrative_area_level_1
+      let poiName = null;
 
-      // 2. Road/Street
-      const road = addr.road || addr.pedestrian || addr.path || null;
+      for (const comp of components) {
+        const types = comp.types;
+        if (types.includes('street_number')) houseNumber = comp.long_name;
+        if (types.includes('route')) road = comp.long_name;
+        if (types.includes('sublocality_level_1') || types.includes('sublocality')) area = comp.long_name;
+        if (types.includes('locality') || types.includes('administrative_area_level_2')) district = comp.long_name;
+        if (types.includes('administrative_area_level_1')) city = comp.long_name;
+        if (types.includes('point_of_interest') || types.includes('establishment')) {
+          if (!poiName && comp.long_name !== road) poiName = comp.long_name;
+        }
+      }
 
-      // 3. POI name
-      const poiName =
-        addr.amenity || addr.shop || addr.office || addr.tourism
-        || addr.leisure || addr.industrial
-        || (data.name && data.name !== road ? data.name : null)
-        || null;
-
-      // 4. Area (Ward, Suburb, etc.)
-      const area =
-        addr.suburb || addr.quarter || addr.neighbourhood
-        || addr.hamlet || addr.village || addr.town || null;
-
-      // 5. District
-      const district = addr.city_district || addr.county || addr.district || null;
-
-      // 6. City
-      const city = addr.city || addr.state || null;
+      // If still no house number, scan across all results
+      if (!houseNumber) {
+        for (const comp of allComponents) {
+          if (comp.types.includes('street_number')) { houseNumber = comp.long_name; break; }
+        }
+      }
+      // Fill missing road/area/district/city from other results if needed
+      if (!road) {
+        for (const comp of allComponents) {
+          if (comp.types.includes('route')) { road = comp.long_name; break; }
+        }
+      }
+      if (!area) {
+        for (const comp of allComponents) {
+          if (comp.types.includes('sublocality_level_1') || comp.types.includes('sublocality')) { area = comp.long_name; break; }
+        }
+      }
+      if (!district) {
+        for (const comp of allComponents) {
+          if (comp.types.includes('locality') || comp.types.includes('administrative_area_level_2')) { district = comp.long_name; break; }
+        }
+      }
+      if (!city) {
+        for (const comp of allComponents) {
+          if (comp.types.includes('administrative_area_level_1')) { city = comp.long_name; break; }
+        }
+      }
 
       // ── Build full address string ──
       const parts: string[] = [];
@@ -209,18 +240,15 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Geocoded
       if (district && district !== area) parts.push(district);
       if (city && city !== district && city !== area) parts.push(city);
 
-      const full =
-        parts.length > 0
-          ? parts.join(', ')
-          : (data.display_name ?? '').split(',').slice(0, 3).join(',').trim()
-          || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      const full = parts.length > 0 ? parts.join(', ') : resultObj.formatted_address;
 
       // Short version: first 2 meaningful parts
       const shortParts = parts.slice(0, 2);
       const short = shortParts.length > 0 ? shortParts.join(', ') : full.split(',').slice(0, 2).join(',').trim();
 
-      // Detect place category
-      const category = detectCategory(data);
+      // Detect place category using Google types
+      const allTypes = resultObj.types || [];
+      const category = detectCategory(allTypes);
 
       const result: GeocodedAddress = {
         full,
@@ -237,14 +265,59 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Geocoded
       memCache.set(key, result);
       savePersistentCache();
       return result;
-    } catch {
-      const fallback: GeocodedAddress = {
-        full: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        short: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        category: 'other',
-      };
-      memCache.set(key, fallback);
-      return fallback;
+    } catch (e) {
+      console.warn("Google Geocoding error, falling back to Nominatim:", e);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi&addressdetails=1&extratags=1&namedetails=1&zoom=19`,
+          {
+            headers: { 'User-Agent': 'FamilyTracker/2.0 (family-tracker-app)' },
+            signal: AbortSignal.timeout(6000),
+          }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const addr = data.address ?? {};
+        
+        const houseNumber = addr.house_number || data.extratags?.['addr:housenumber'] || data.namedetails?.['addr:housenumber'] || addr.building || null;
+        const road = addr.road || addr.pedestrian || addr.path || null;
+        const area = addr.suburb || addr.quarter || addr.neighbourhood || addr.hamlet || addr.village || addr.town || null;
+        const district = addr.city_district || addr.county || addr.district || null;
+        const city = addr.city || addr.state || null;
+        
+        const parts: string[] = [];
+        if (houseNumber && road) parts.push(`${houseNumber} ${road}`);
+        else if (houseNumber) { parts.push(houseNumber); if (road) parts.push(road); }
+        else if (road) parts.push(road);
+        
+        if (area && area !== road) parts.push(area);
+        if (district && district !== area) parts.push(district);
+        if (city && city !== district && city !== area) parts.push(city);
+        
+        const full = parts.length > 0 ? parts.join(', ') : (data.display_name ?? `${lat.toFixed(4)}, ${lng.toFixed(4)}`).split(',').slice(0, 3).join(',').trim();
+        const short = parts.slice(0, 2).length > 0 ? parts.slice(0, 2).join(', ') : full.split(',').slice(0, 2).join(',').trim();
+        
+        const result: GeocodedAddress = {
+          full, short, category: 'other',
+          houseNumber: houseNumber || undefined,
+          road: road || undefined,
+          area: area || undefined,
+          district: district || undefined,
+          city: city || undefined,
+        };
+        memCache.set(key, result);
+        savePersistentCache();
+        return result;
+      } catch (fallbackError) {
+        console.warn("Nominatim fallback also failed:", fallbackError);
+        const fallback: GeocodedAddress = {
+          full: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          short: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          category: 'other',
+        };
+        memCache.set(key, fallback);
+        return fallback;
+      }
     } finally {
       inFlight.delete(key);
     }
